@@ -1,0 +1,351 @@
+<Window x:Class="DynamicIsland.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DynamicIsland.Controls"
+        xmlns:views="clr-namespace:DynamicIsland.Views"
+        Title="AURA — настройки" Width="860" Height="620"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI" Foreground="#F5F5F7" KeyDown="Window_KeyDown"
+        MouseLeftButtonDown="Window_Drag">
+
+    <Border CornerRadius="16" Background="{DynamicResource BgWindowBrush}" Margin="6"
+            BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="216"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Крестик закрытия: жирный X с круглыми концами в акцентном цвете -->
+            <Button Grid.ColumnSpan="2" Panel.ZIndex="5" Width="28" Height="28"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,10,0"
+                    Click="Close_Click" ToolTip="Закрыть" Cursor="Hand">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Bg" CornerRadius="14" Background="{DynamicResource AccentSoftBrush}"/>
+                            <Path x:Name="Cross" Data="M3.2,3.2 L12.8,12.8 M12.8,3.2 L3.2,12.8"
+                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="3"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Width="16" Height="16" Stretch="Uniform"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Cross" Property="Stroke" Value="{DynamicResource BgWindowBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Cross" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- ===== Сайдбар ===== -->
+            <Border Background="{DynamicResource BgSidebarBrush}" CornerRadius="16,0,0,16"
+                    BorderBrush="{DynamicResource OverlayFaintBrush}" BorderThickness="0,0,1,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Margin="16,18,12,10">
+                        <TextBlock Text="AURA" FontSize="18" FontWeight="Bold" Margin="2,0,0,0"/>
+                        <TextBlock x:Name="VersionLabel" Text="Версия 1.4.0" FontSize="12.5"
+                                   Foreground="{DynamicResource TextDimBrush}" Margin="2,3,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel x:Name="NavPanel" Grid.Row="1" Margin="8,2"/>
+
+                    <StackPanel Grid.Row="2" Margin="16,8,16,14">
+                        <TextBlock Text="Изменения сохраняются сразу" FontSize="11"
+                                   Foreground="{DynamicResource TextDimBrush}" Margin="2,0,0,8"/>
+                        <Button Style="{StaticResource ChipButton}" HorizontalContentAlignment="Left" Click="Exit_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource VecIcon}" Width="13" Height="13"
+                                      Data="{StaticResource ic_power}" Fill="#FF5252"/>
+                                <TextBlock Text="Выйти из AURA" FontSize="13.5" Margin="8,0,0,0"
+                                           Foreground="#FF8A8A"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== Контент ===== -->
+            <Grid Grid.Column="1" Margin="0,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="56"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Margin="22,0,22,0">
+                    <TextBlock x:Name="PageTitle" Text="Персонаж" FontSize="21" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" Margin="22,0,22,16">
+
+                    <Grid>
+                        <!-- ======== Персонаж ======== -->
+                        <StackPanel x:Name="PageCharacter">
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Цвет глаз и свечения" FontSize="14" FontWeight="SemiBold"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <WrapPanel x:Name="PaletteWrap" VerticalAlignment="Center" Width="220" Margin="4,0,0,0"/>
+                                        <TextBox x:Name="HexBox" Width="86" Margin="10,0,6,0" Text="#7C4DFF"
+                                                 VerticalAlignment="Center" KeyDown="Hex_KeyDown"/>
+                                        <Button Style="{StaticResource ChipButton}" Content="OK"
+                                                VerticalAlignment="Center" Click="Hex_Apply"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14" Margin="0,10,0,0"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="Свечение по краям островка" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Мягкое гало в цвет глаз по периметру" FontSize="12"
+                                                   Foreground="{DynamicResource TextSecBrush}" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <ToggleButton x:Name="SwGlow" Style="{StaticResource Switch}"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" Click="Behavior_Changed"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14" Margin="0,10,0,0"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Поведение глаз" FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Аура следит за курсором, моргает и засыпает после 45 секунд бездействия. Просыпаясь, она несколько секунд «ищет» указатель взглядом по экрану, после чего фокусируется на нём."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ======== Темы ======== -->
+                        <StackPanel x:Name="PageThemes" Visibility="Collapsed">
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Цветовая тема" FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Тема задаёт цвет компаньона — из него строятся все акценты приложения. Ручной выбор цвета на странице «Персонаж» переключает тему в «Своя»."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,12"/>
+                                    <WrapPanel x:Name="ThemeCardsHost"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14" Margin="0,10,0,0"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Авто и Системная" FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock Text="«Системная» подхватывает акцентный цвет Windows (панель задач, переключатели, рамки окон) и обновляется при его смене. «Авто» переключает Утреннюю / Дневную / Вечернюю / Ночную по времени суток: 5–9, 9–17, 17–21 и 21–5."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ======== Общее ======== -->
+                        <StackPanel x:Name="PageGeneral" Visibility="Collapsed">
+
+                            <TextBlock Text="Свёрнутый вид" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="StyleIsland" Content="Островок (плавающий)" GroupName="StyleMode"
+                                                 Foreground="{DynamicResource TextPriBrush}" FontSize="13" Checked="Style_Changed"/>
+                                    <RadioButton x:Name="StyleNotch" Content="Вырез-шторка от края экрана" GroupName="StyleMode"
+                                                 Foreground="{DynamicResource TextPriBrush}" FontSize="13" Margin="18,0,0,0" Checked="Style_Changed"/>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Отображение" FontSize="14" FontWeight="SemiBold" Margin="2,12,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel Orientation="Horizontal" Margin="0,4"><ToggleButton x:Name="SwClock" Style="{StaticResource Switch}" Click="Display_Changed"/><TextBlock Text=" Часы" FontSize="13" VerticalAlignment="Center"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="24,4,0,4"><ToggleButton x:Name="SwSeconds" Style="{StaticResource Switch}" Click="Display_Changed"/><TextBlock Text=" Секунды" FontSize="13" VerticalAlignment="Center"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="24,4,0,4"><ToggleButton x:Name="SwWeather" Style="{StaticResource Switch}" Click="Display_Changed"/><TextBlock Text=" Погода на главной" FontSize="13" VerticalAlignment="Center"/></StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Поведение" FontSize="14" FontWeight="SemiBold" Margin="2,12,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                                        <ToggleButton x:Name="SwTopmost" Style="{StaticResource Switch}" Click="Behavior_Changed"/>
+                                        <TextBlock Text=" Поверх всех окон" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                                        <ToggleButton x:Name="SwCollapseLoss" Style="{StaticResource Switch}" Click="Behavior_Changed"/>
+                                        <TextBlock Text=" Сворачивать при потере фокуса" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                                        <ToggleButton x:Name="SwAutostart" Style="{StaticResource Switch}" Click="Autostart_Changed"/>
+                                        <TextBlock Text=" Запускать с Windows" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="44"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Непрозрачность" FontSize="13" VerticalAlignment="Center"/>
+                                        <Slider x:Name="OpacitySlider" Grid.Column="1" Minimum="60" Maximum="100" ValueChanged="Opacity_Changed"/>
+                                        <TextBlock x:Name="OpacityText" Grid.Column="2" FontSize="12" Foreground="{DynamicResource TextSecBrush}"
+                                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Button Style="{StaticResource ChipButton}" Content="Сбросить настройки"
+                                    HorizontalAlignment="Left" Margin="2,12,0,0" Click="Reset_Click"/>
+                        </StackPanel>
+
+                        <!-- ======== Статус-бар ======== -->
+                        <StackPanel x:Name="PageStats" Visibility="Collapsed">
+                            <TextBlock Text="Блок на островке" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                                        <ToggleButton x:Name="SwBattery" Style="{StaticResource Switch}" Click="Display_Changed"/>
+                                        <TextBlock Text=" Батарея (всегда видна при наличии АКБ)" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                                        <ToggleButton x:Name="SwStats" Style="{StaticResource Switch}" Click="Display_Changed"/>
+                                        <TextBlock Text=" Статус-бар системы" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Метрики" FontSize="14" FontWeight="SemiBold" Margin="2,12,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <UniformGrid Columns="3" Rows="1">
+                                    <StackPanel Orientation="Horizontal" Margin="0,4"><ToggleButton x:Name="SwCpu" Style="{StaticResource Switch}" Click="Display_Changed"/><TextBlock Text=" CPU" FontSize="13" VerticalAlignment="Center"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4"><ToggleButton x:Name="SwRam" Style="{StaticResource Switch}" Click="Display_Changed"/><TextBlock Text=" RAM" FontSize="13" VerticalAlignment="Center"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4"><ToggleButton x:Name="SwGpu" Style="{StaticResource Switch}" Click="Display_Changed"/><TextBlock Text=" GPU" FontSize="13" VerticalAlignment="Center"/></StackPanel>
+                                </UniformGrid>
+                            </Border>
+
+                            <TextBlock Text="Игровой режим" FontSize="14" FontWeight="SemiBold" Margin="2,12,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="Тонкий вырез в играх" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Когда игра развёрнута на весь экран, островок превращается в тонкий вырез, а статус-бар показывает температуру CPU/GPU, ping и потери пакетов. Температура GPU — через nvidia-smi (только NVIDIA)."
+                                                   FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextSecBrush}" Margin="0,2,50,0"/>
+                                    </StackPanel>
+                                    <ToggleButton x:Name="SwGameMode" Style="{StaticResource Switch}"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" Click="Behavior_Changed"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ======== Клавиши ======== -->
+                        <StackPanel x:Name="PageHotkeys" Visibility="Collapsed">
+                            <TextBlock Text="Развернуть / свернуть островок" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel x:Name="HotkeyList"/>
+                            </Border>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14" Margin="0,10,0,0"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Другие сочетания" FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Esc — свернуть панель или закрыть настройки. Наведение курсора на островок — развернуть, убирание — свернуть. Потянуть островок вниз — тоже развернуть. Смахивание влево/вправо по панели — листание вкладок. ПКМ по островку — контекстное меню; иконка в трее — тема, статус-бар и выход."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ======== ИИ ======== -->
+                        <StackPanel x:Name="PageAi" Visibility="Collapsed">
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="OpenAI-совместимый API" FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Используется вкладкой «ИИ-чат». Подойдёт OpenAI, OpenRouter, локальный LM Studio и т.п."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,2,0,12"/>
+                                    <TextBlock Text="Base URL" FontSize="12" Foreground="{DynamicResource TextSecBrush}"/>
+                                    <TextBox x:Name="ApiBaseUrlBox" Margin="0,4,0,10" LostFocus="Ai_Save"/>
+                                    <TextBlock Text="API key" FontSize="12" Foreground="{DynamicResource TextSecBrush}"/>
+                                    <PasswordBox x:Name="ApiKeyBox" Margin="0,4,0,10" LostFocus="Ai_Save"/>
+                                    <TextBlock Text="Модель" FontSize="12" Foreground="{DynamicResource TextSecBrush}"/>
+                                    <TextBox x:Name="ApiModelBox" Margin="0,4,0,0" LostFocus="Ai_Save"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ======== Модули ======== -->
+                        <StackPanel x:Name="PageStore" Visibility="Collapsed">
+                            <views:WidgetStorePanel/>
+                        </StackPanel>
+
+                        <!-- ======== Обновления ======== -->
+                        <StackPanel x:Name="PageUpdates" Visibility="Collapsed">
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock x:Name="UpdatesVersionText" Text="Версия 1.2.0" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Проверять новые версии при запуске" FontSize="12"
+                                                   Foreground="{DynamicResource TextSecBrush}" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <ToggleButton x:Name="SwUpdates" Style="{StaticResource Switch}"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" Click="Updates_Changed"/>
+                                </Grid>
+                            </Border>
+                            <Button Style="{StaticResource ChipButton}" Content="Проверить сейчас"
+                                    HorizontalAlignment="Left" Margin="2,10,0,12" Click="CheckNow_Click"/>
+
+                            <TextBlock Text="Что нового" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel x:Name="ChangelogPanel">
+                                    <TextBlock Text="Версия 1.6.1" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                               Text="• Компаньон перерисован в стиле Genshin Impact и стал полностью векторным: миндалевидная форма, острый угловатый лайнер со стрелкой, градиентная радужка с бликами — таинственно, легко и воздушно.&#x0A;• Глаза живые, без дискретных кадров: радужка непрерывно и плавно следует за курсором с пружинным сглаживанием, моргание — плавный спуск века (иногда двойной), сон — закрытые глаза, пробуждение — взгляд «ищет» указатель по экрану и фокусируется на нём; если курсор на самом компаньоне — довольный щур.&#x0A;• Контур глаз адаптивен: чёрный на светлой теме, белый светящийся — на тёмной; радужка перекрашивается под акцентный цвет.&#x0A;• Анимация раскрытия — быстрая (380 мс) гладкая кривая Безье, как cubic-bezier в iOS; содержимое скрывается с первого кадра анимации.&#x0A;• Одинаковые отступы 14 px от краёв островка и между всеми элементами — тело замеряет реальный контент.&#x0A;• Компаньон убран из раскрытого состояния — Аура живёт только в островке.&#x0A;• Крестик закрытия настроек — в акцентном цвете темы.&#x0A;• Плеер: 2/3 ширины под обложку, транспорт и громкость, 1/3 справа — плейлист."/>
+                                    <TextBlock Text="Версия 1.6.0" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                               Text="• Глаза Ауры перерисованы по референсу: вертикальная радужка с градиентом, колючие ресницы веером наружу, брови-дуги, крупные блики.&#x0A;• Плеер: компоновка без наложений — обложка-персонаж, под ней трек, сикбар, транспорт, громкость отдельной строкой.&#x0A;• Анимация раскрытия переписана: контент фиксированного размера проявляется фазами, без перекомпоновки и дёрганья.&#x0A;• Единый боковой отступ 10 px для всех строк раскрытого вида.&#x0A;• Крестик настроек — стилизованный жирный X в цветах темы, подсвечивается акцентом."/>
+                                    <TextBlock Text="Версия 1.5.0" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                               Text="• Аэро-плитка навбара: единая подложка плавно переезжает к активной вкладке, бордер вкладки убран.&#x0A;• Жесты: потянуть островок вниз — «резиновое» растяжение и раскрытие, смахивание влево/вправо по панели — листание вкладок.&#x0A;• Погода на главной панели: Open-Meteo, локация из геолокации Windows или по IP, прогноз на 5 часов.&#x0A;• Иконка в трее: тема, статус-бар, выход.&#x0A;• Игровой режим: в полноэкранных играх — тонкий вырез с температурой CPU/GPU, ping и потерями пакетов.&#x0A;• У Ауры появились ресницы; оставлены сон, моргание и слежение; пробуждение — с «поиском» указателя взглядом.&#x0A;• Анимация раскрытия с раздельными осями: сначала вширь с перелётом, высота догоняет.&#x0A;• Модули переехали в настройки, в настройках появился крестик. Внутренний бокс — с тематичным оттенком и отступом снизу.&#x0A;• Статус-бар без HDD и двухстрочного режима."/>
+                                    <TextBlock Text="Версия 1.4.0" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                               Text="• Приложение теперь называется AURA.&#x0A;• Светлые темы: Утренняя и Дневная на белом фоне, Авто переключает светлую/тёмную по времени суток.&#x0A;• Батарея объединена со статус-баром; двухстрочный режим с температурами и заполненностью диска — в новом разделе «Статус-бар».&#x0A;• Более плавная пружинная анимация раскрытия.&#x0A;• Компаньон стал компактнее; крупнее мелкий текст; незаметные скроллбары.&#x0A;• Горячие клавиши — списком без выпадающего меню."/>
+                                    <TextBlock Text="Версия 1.3.0" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                               Text="• Темы оформления: Классика, Системная (цвет Windows), Утренняя, Дневная, Вечерняя, Ночная и Авто по времени суток.&#x0A;• Свёрнутый вид в одну линию: часы слева, компаньон по центру, батарея и статус-бар справа.&#x0A;• Иконки в стиле SF Symbols filled (Phosphor Fill).&#x0A;• Базовый размер островка 200×50, секунды на часах — опция.&#x0A;• Вырез с плавными «плечиками» у края экрана.&#x0A;• Пружинная анимация раскрытия, тень в цвет компаньона вместо бордера."/>
+                                    <TextBlock Text="Версия 1.2.0" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                               Text="• Настройки переехали в отдельное окно с разделами.&#x0A;• Навбар островка: компактные иконки, активная вкладка — пилюля.&#x0A;• Панель «Система»: крупные плитки с чипами в стиле macOS Control Center, плитка батареи, блокировка и сон.&#x0A;• Батарея на островке зеленеет при зарядке.&#x0A;• Настраиваемая горячая клавиша раскрытия."/>
+                                    <TextBlock Text="Версия 1.1.0" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                               Text="• Векторные иконки Lucide вместо эмодзи.&#x0A;• Чистый глубокий чёрный и мягкое круглое свечение.&#x0A;• Раскрытие по наведению курсора.&#x0A;• Индикатор батареи на островке."/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

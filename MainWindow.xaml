@@ -1,0 +1,18 @@
+<Window x:Class="AnimeEyes.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AnimeEyes"
+        Title="Anime Eyes Preview" Height="480" Width="720"
+        Background="#111111">
+    <Grid>
+        <local:AnimeEyesControl x:Name="Eyes" Width="520" Height="300" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,30">
+            <Button Content="Обычный" Click="Normal_Click" Margin="6" Padding="12,6"/>
+            <Button Content="Смущение" Click="Blush_Click" Margin="6" Padding="12,6"/>
+            <Button Content="Удивление" Click="Surprise_Click" Margin="6" Padding="12,6"/>
+            <Button Content="Грусть" Click="Sad_Click" Margin="6" Padding="12,6"/>
+            <Button Content="Моргнуть" Click="Blink_Click" Margin="6" Padding="12,6"/>
+        </StackPanel>
+    </Grid>
+</Window>

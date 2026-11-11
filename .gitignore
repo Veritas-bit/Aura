@@ -1,0 +1,10 @@
+# .NET build outputs
+**/bin/
+**/obj/
+**/publish/
+**/publish_run/
+
+# Visual Studio
+.vs/
+*.user
+*.suo

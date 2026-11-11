@@ -1,0 +1,2 @@
+Job log: C:\Users\maked\AppData\Local\Temp\image_generation-job-doeyh8_s\worker.log
+Job PID file: C:\Users\maked\AppData\Local\Temp\image_generation-job-doeyh8_s\worker.pid

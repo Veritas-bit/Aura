@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AURA</AssemblyName>
+    <RootNamespace>DynamicIsland</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.6.1</Version>
+    <Product>AURA — островок-компаньон для Windows</Product>
+    <Description>Лаунчер-компаньон AURA в стиле Dynamic Island / macOS для Windows</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WMI для яркости дисплея -->
+    <PackageReference Include="System.Management" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

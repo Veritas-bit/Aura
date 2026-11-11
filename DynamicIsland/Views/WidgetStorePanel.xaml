@@ -1,0 +1,23 @@
+<UserControl x:Class="DynamicIsland.Views.WidgetStorePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource VecIcon}" Width="15" Height="15" Data="{StaticResource ic_puzzle}" Margin="0,0,6,0"/>
+                <TextBlock Text="Widget Store" FontSize="14" FontWeight="SemiBold"/>
+            </StackPanel>
+            <TextBlock Text="Модули-дополнения появятся в обновлениях. Отметьте, чего ждёте больше всего."
+                       FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <WrapPanel x:Name="StoreWrap"/>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

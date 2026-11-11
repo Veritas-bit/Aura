@@ -1,0 +1,23 @@
+<Window x:Class="CompanionEyes.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:eyes="clr-namespace:CompanionEyes.Controls"
+ Title="Companion Eyes Demo" Width="560" Height="330"
+ WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+ Topmost="True" ShowInTaskbar="True" ResizeMode="NoResize">
+ <Grid Background="Transparent" MouseMove="Root_MouseMove" MouseLeave="Root_MouseLeave">
+  <Border Background="#E6101420" CornerRadius="28" Padding="12" BorderBrush="#553B82F6" BorderThickness="1">
+   <Grid>
+    <eyes:CompanionEyesControl x:Name="Eyes" HorizontalAlignment="Center" VerticalAlignment="Center" Width="510" Height="285"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,2">
+     <Button Content="Idle" Click="Idle_Click" Margin="3" Padding="10,4"/>
+     <Button Content="Search" Click="Search_Click" Margin="3" Padding="10,4"/>
+     <Button Content="Sleep" Click="Sleep_Click" Margin="3" Padding="10,4"/>
+     <Button Content="Alert" Click="Alert_Click" Margin="3" Padding="10,4"/>
+     <Button Content="Type" Click="Type_Click" Margin="3" Padding="10,4"/>
+     <Button Content="Voice" Click="Voice_Click" Margin="3" Padding="10,4"/>
+    </StackPanel>
+   </Grid>
+  </Border>
+ </Grid>
+</Window>
