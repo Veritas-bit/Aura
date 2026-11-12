@@ -8,7 +8,7 @@
   <Properties>
     <DisplayName>AURA</DisplayName>
     <PublisherDisplayName>Veritas-bit</PublisherDisplayName>
-    <Logo>Assets\Square150x150Logo.png</Logo>
+    <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
@@ -24,9 +24,7 @@
         Description="Dynamic Island companion for Windows"
         BackgroundColor="#050507"
         Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Square150x150Logo.png" />
-      </uap:VisualElements>
+        Square44x44Logo="Assets\Square44x44Logo.png" />
     </Application>
   </Applications>
   <Capabilities>
