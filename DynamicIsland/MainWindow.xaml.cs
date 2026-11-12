@@ -814,13 +814,10 @@ public partial class MainWindow : Window
             !NotificationListenerService.IsPackaged)
             return;
 
-        bool requestAccess = !SettingsService.Current.NotificationsPermissionRequested;
-        bool? allowed = await _notificationListener.StartAsync(requestAccess);
-        if (requestAccess && allowed.HasValue)
-        {
-            SettingsService.Current.NotificationsPermissionRequested = true;
-            SettingsService.NotifyChanged();
-        }
+        // Windows remembers the user's decision. If the prompt was dismissed,
+        // Unspecified permits asking again; Denied does not show another prompt.
+        // Do not persist a separate "requested" flag that would suppress retry.
+        await _notificationListener.StartAsync(requestAccess: true);
     }
 
     private void OnDesktopNotificationReceived(DesktopNotification notification)

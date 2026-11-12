@@ -26,8 +26,13 @@ From the repository root, run `rebuild-feature.bat`. It fetches and checks out
 closes the old AURA process, publishes the new binary, and launches it. This
 prevents accidentally running the old `main` build or an old `publish/AURA.exe`.
 
-The feature branch also runs a Windows CI build and verifies an unsigned MSIX
-package. CI artifacts are unsigned build outputs, not production installers.
+The feature branch also runs a Windows CI build which compiles the WPF app,
+publishes a Windows x64 executable, and tests MSIX package creation. It also
+produces a **development** MSIX signed with a disposable self-signed certificate
+plus its public `.cer` file. Download both from GitHub Actions to test the
+MSIX installation. Import the public certificate in Trusted People before
+installing. CI never uploads its private `.pfx` signing key. Development MSIX
+packages are not production installers.
 
 ## Build a portable EXE
 

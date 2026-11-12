@@ -44,6 +44,21 @@ jobs:
           Copy-Item -Path "Assets" -Destination "out/win-x64/Assets" -Recurse -Force
           winapp pack "out/win-x64" --manifest "Package.appxmanifest" --no-sign
 
+      - name: Create signed development MSIX
+        shell: pwsh
+        run: |
+          winapp cert generate --manifest "Package.appxmanifest" --if-exists skip --export-cer
+          winapp pack "out/win-x64" --manifest "Package.appxmanifest" --cert "devcert.pfx" --output "AURA-test.msix"
+
+      - name: Upload signed MSIX and public certificate
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURA-dev-msix-${{ github.sha }}
+          path: |
+            AURA-test.msix
+            devcert.cer
+          if-no-files-found: error
+
       - name: Upload checked Windows executable
         if: always()
         uses: actions/upload-artifact@v4
