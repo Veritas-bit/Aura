@@ -940,7 +940,7 @@ public partial class MainWindow : Window
                 _brightnessDiagnosis = diagnosis;
                 try
                 {
-                    var log = Path.Combine(SettingsService.DataDir, "brightness.log");
+                    var log = System.IO.Path.Combine(SettingsService.DataDir, "brightness.log");
                     File.AppendAllText(log, $"[{DateTime.Now:O}] {diagnosis}{Environment.NewLine}");
                 }
                 catch { /* logging must never interrupt the UI */ }
@@ -966,7 +966,7 @@ public partial class MainWindow : Window
                 _brightnessDiagnosis = exception.GetType().Name;
                 try
                 {
-                    File.AppendAllText(Path.Combine(SettingsService.DataDir, "brightness.log"),
+                    File.AppendAllText(System.IO.Path.Combine(SettingsService.DataDir, "brightness.log"),
                         $"[{DateTime.Now:O}] Brightness error: {exception}{Environment.NewLine}");
                 }
                 catch { }
