@@ -1,6 +1,7 @@
 <Window x:Class="DynamicIsland.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DynamicIsland.Controls"
         Title="AURA" Width="808" Height="640"
         WindowStyle="None" AllowsTransparency="True" Background="{x:Null}"
         ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
@@ -48,8 +49,9 @@
 
                     <Border x:Name="ClockDivider" Width="1" Height="22" Background="{DynamicResource BorderSoftBrush}"
                             Margin="14,0,12,0" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="AuraLabel" Text="AURA" FontSize="11" FontWeight="Bold"
-                               Foreground="{DynamicResource TextSecBrush}" VerticalAlignment="Center"/>
+                    <controls:CapsuleEyesControl x:Name="CompanionEyes" Width="30" Height="22"
+                                                  AccentBrush="{DynamicResource AccentBrush}"
+                                                  VerticalAlignment="Center" ToolTip="AURA Companion"/>
                     <!-- Батарея + статус-бар — единый блок справа -->
                     <StackPanel x:Name="StatsPanel" Orientation="Horizontal" Margin="14,0,0,0">
                         <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center">
