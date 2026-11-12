@@ -360,12 +360,6 @@ public partial class MainWindow : Window
         ExpandedView.Width = ExpandedContentW - 8 * UiScale;
         ExpandedView.Height = expandedH - 2 * UiScale;
         ExpandedView.Opacity = SmoothStep(Math.Clamp((c - 0.82) / 0.16, 0, 1));
-        // The dedicated clock slot is revealed only when the island has reached
-        // its full horizontal expansion; its fixed width prevents nav shifting.
-        bool fullyExpandedWidth = SettingsService.Current.ShowClock
-                                  && widthProgress >= 0.995 && c >= 0.995;
-        ExpandedClockBlock.Visibility = fullyExpandedWidth ? Visibility.Visible : Visibility.Collapsed;
-        ExpandedClockBlock.Opacity = fullyExpandedWidth ? ExpandedView.Opacity : 0;
         ExpandedView.IsHitTestVisible = _expanded && ExpandedView.Opacity > 0.95;
     }
 
@@ -419,7 +413,7 @@ public partial class MainWindow : Window
 
         CollapsedClockBlock.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         ClockText.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
-        ClockSeconds.Visibility = s.ShowClock && s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
+        ClockSecondsBlock.Visibility = s.ShowClock && s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
         ClockDivider.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         BatteryPanel.Visibility = s.ShowBattery && _monitor.Stats.HasBattery ? Visibility.Visible : Visibility.Collapsed;
         s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
@@ -669,7 +663,6 @@ public partial class MainWindow : Window
         var now = DateTime.Now;
         ClockText.Text = now.ToString("HH:mm");
         ClockSeconds.Text = now.ToString(":ss");
-        ExpandedClockText.Text = now.ToString("HH:mm:ss");
 
     }
 
