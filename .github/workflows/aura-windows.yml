@@ -45,6 +45,7 @@ jobs:
           winapp pack "out/win-x64" --manifest "Package.appxmanifest" --no-sign
 
       - name: Upload checked Windows executable
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: AURA-win-x64-${{ github.sha }}
