@@ -777,8 +777,6 @@ public partial class MainWindow : Window
         string title = _currentMedia.Title;
         string artist = _currentMedia.Artist;
         string trackText = string.IsNullOrWhiteSpace(artist) ? title : $"{title} — {artist}";
-
-        bool showTransient = _transientKind != TransientCardKind.None;
         CollapsedStack.Visibility = showTransient || showTrack ? Visibility.Collapsed : Visibility.Visible;
         CollapsedTrackView.Visibility = showTransient ? Visibility.Collapsed
             : showTrack ? Visibility.Visible : Visibility.Collapsed;
@@ -874,7 +872,7 @@ public partial class MainWindow : Window
 
         bool showProgress = kind == TransientCardKind.Volume && progress.HasValue;
         TransientProgressTrack.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
-        TransientProgressFill.Width = showProgress ? 240 * Math.Clamp(progress!.Value, 0, 100) / 100 : 0;
+        TransientProgressFill.Width = showProgress ? 240 * UiScale * Math.Clamp(progress!.Value, 0, 100) / 100 : 0;
 
         TransientCardView.Width = 330 * UiScale;
         TransientCardView.Visibility = Visibility.Visible;
