@@ -79,11 +79,13 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
         }
     }
 
-    /// <summary>Receives pointer coordinates relative to this control from its parent island.</summary>
-    public void TrackPointer(Point point)
+    /// <summary>Receives pointer coordinates and bounds of the full collapsed island.</summary>
+    public void TrackPointer(Point point, Size pointerArea)
     {
-        _targetGazeX = Math.Clamp((point.X / Math.Max(1, ActualWidth) - 0.5) * 2, -1, 1);
-        _targetGazeY = Math.Clamp((point.Y / Math.Max(1, ActualHeight) - 0.5) * 2, -1, 1);
+        // Normalize against the whole island, not the tiny 30x22 eye control.
+        // This keeps cursor direction meaningful across the complete collapsed view.
+        _targetGazeX = Math.Clamp((point.X / Math.Max(1, pointerArea.Width) - 0.5) * 2, -1, 1);
+        _targetGazeY = Math.Clamp((point.Y / Math.Max(1, pointerArea.Height) - 0.5) * 2, -1, 1);
     }
 
     public void PointerLeft()
@@ -96,8 +98,8 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
     {
         if (_disposed || !IsVisible) return;
 
-        _gazeX += (_targetGazeX - _gazeX) * 0.16;
-        _gazeY += (_targetGazeY - _gazeY) * 0.16;
+        _gazeX += (_targetGazeX - _gazeX) * 0.24;
+        _gazeY += (_targetGazeY - _gazeY) * 0.24;
 
         var now = DateTime.Now;
         if (_isBlinking)
@@ -142,8 +144,8 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
 
         double totalWidth = eyeWidth * 2 + gap;
         double left = (width - totalWidth) / 2;
-        double top = (height - eyeHeight) / 2 + _gazeY * 0.7;
-        left += _gazeX * 1.5;
+        double top = (height - eyeHeight) / 2 + _gazeY * 2.6;
+        left += _gazeX * 4.5;
         var brush = AccentBrush ?? Brushes.MediumPurple;
 
         DrawCapsule(drawingContext, brush, left, top, eyeWidth, eyeHeight);
