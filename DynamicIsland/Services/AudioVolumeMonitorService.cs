@@ -20,16 +20,34 @@ public sealed class AudioVolumeMonitorService : IDisposable
     public bool IsMuted { get; private set; }
     public bool HeadphonesConnected { get; private set; }
 
-    private static bool IsHeadphoneEndpoint(string name)
+    private static bool IsHeadphoneEndpoint(MMDevice device)
     {
-        // Windows endpoint friendly names vary by driver and locale. Avoid claiming
-        // that ordinary speakers are headphones when the output type is uncertain.
+        // Prefer Windows Core Audio endpoint form factor over textual guesses.
+        // 3 = Headphones, 5 = Headset (EndpointFormFactor from mmdeviceapi.h).
+        // Certain Bluetooth drivers report Speakers, so also check explicit labels.
+        string name = device.FriendlyName ?? "";
         string[] keywords =
         {
             "headphone", "headset", "earphone", "earbud", "airpods",
             "наушник", "гарнитур", "наушники", "buds"
         };
-        return keywords.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase));
+        if (keywords.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        try
+        {
+            var property = device.Properties[PropertyKeys.PKEY_AudioEndpoint_FormFactor];
+            if (property != null)
+            {
+                int formFactor = Convert.ToInt32(property.Value);
+                return formFactor is 3 or 5;
+            }
+        }
+        catch
+        {
+            // A driver may omit or reject this optional metadata.
+        }
+        return false;
     }
 
     public AudioVolumeMonitorService()
@@ -69,7 +87,7 @@ public sealed class AudioVolumeMonitorService : IDisposable
             CurrentVolumePercent = Math.Clamp(Math.Round(
                 next.AudioEndpointVolume.MasterVolumeLevelScalar * 100), 0, 100);
             IsMuted = next.AudioEndpointVolume.Mute;
-            HeadphonesConnected = IsHeadphoneEndpoint(next.FriendlyName ?? "");
+            HeadphonesConnected = IsHeadphoneEndpoint(next);
             next.AudioEndpointVolume.OnVolumeNotification += OnEndpointVolumeChanged;
             OutputDeviceChanged?.Invoke();
         }

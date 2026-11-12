@@ -354,7 +354,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            double r = Lerp(collapsedH / 2, 24 * UiScale, c);
+            // Compact 24/46 DIP views are pills. The 80 DIP cards are rounded
+            // rectangles (24 DIP corners), not oversized 40 DIP capsules.
+            double r = Lerp(Math.Min(24, collapsedH / 2), 24 * UiScale, c);
             Body.Data = RoundedRect(w, h, Math.Min(r, h / 2));
         }
         Body.Margin = new Thickness(x, y, 0, 0);
@@ -363,6 +365,8 @@ public partial class MainWindow : Window
         CollapsedView.Margin = new Thickness(x + collapsedInset, y, 0, 0);
         CollapsedView.Width = Math.Max(1, contentW);
         CollapsedView.Height = collapsedH;
+        // Prevent artwork/text from painting outside the rounded black Body.
+        CollapsedView.Clip = Body.Data.Clone();
         CollapsedTrackView.Clip = null;
         // Clear the old layout first, morph the surface, then reveal the new layout.
         CollapsedView.Opacity = SmoothStep(Math.Clamp((0.16 - c) / 0.16, 0, 1));
@@ -722,7 +726,7 @@ public partial class MainWindow : Window
         bool wasShowingEqualizer = ShowTrackEqualizer;
         double previousHeight = CollapsedHeight;
         _currentMedia = info;
-        if (trackChanged && info.HasTrack)
+        if (trackChanged && info.HasTrack && !_expanded)
         {
             ShowTransientCard(TransientCardKind.Track, info.Title, info.Artist,
                 info.AlbumTitle, info.Artwork, TimeSpan.FromSeconds(4));
