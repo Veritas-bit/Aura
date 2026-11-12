@@ -37,6 +37,8 @@ public class AppSettings
     public bool ShowClock { get; set; } = true;
     public bool ShowSeconds { get; set; } = false;
     public bool ShowBattery { get; set; } = true;
+    // Status metrics remain available in the expanded/game interfaces.
+    // The six fixed-size Figma compact states do not show a metrics strip.
     public bool ShowStats { get; set; } = true;
     public bool StatCpu { get; set; } = true;
     public bool StatRam { get; set; } = true;

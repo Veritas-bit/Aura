@@ -15,6 +15,22 @@ public sealed class AudioVolumeMonitorService : IDisposable
 
     /// <summary>Volume in percent (0..100), and mute state.</summary>
     public event Action<double, bool>? VolumeChanged;
+    public event Action? OutputDeviceChanged;
+    public double CurrentVolumePercent { get; private set; }
+    public bool IsMuted { get; private set; }
+    public bool HeadphonesConnected { get; private set; }
+
+    private static bool IsHeadphoneEndpoint(string name)
+    {
+        // Windows endpoint friendly names vary by driver and locale. Avoid claiming
+        // that ordinary speakers are headphones when the output type is uncertain.
+        string[] keywords =
+        {
+            "headphone", "headset", "earphone", "earbud", "airpods",
+            "наушник", "гарнитур", "наушники", "buds"
+        };
+        return keywords.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase));
+    }
 
     public AudioVolumeMonitorService()
     {
@@ -50,7 +66,12 @@ public sealed class AudioVolumeMonitorService : IDisposable
 
             DetachDevice();
             _device = next;
+            CurrentVolumePercent = Math.Clamp(Math.Round(
+                next.AudioEndpointVolume.MasterVolumeLevelScalar * 100), 0, 100);
+            IsMuted = next.AudioEndpointVolume.Mute;
+            HeadphonesConnected = IsHeadphoneEndpoint(next.FriendlyName ?? "");
             next.AudioEndpointVolume.OnVolumeNotification += OnEndpointVolumeChanged;
+            OutputDeviceChanged?.Invoke();
         }
         catch
         {
@@ -67,6 +88,8 @@ public sealed class AudioVolumeMonitorService : IDisposable
         // This callback can run on a Core Audio worker thread:
         // never interact with COM or WPF from here.
         double percent = Math.Clamp(Math.Round(args.MasterVolume * 100), 0, 100);
+        CurrentVolumePercent = percent;
+        IsMuted = args.Muted;
         VolumeChanged?.Invoke(percent, args.Muted);
     }
 
@@ -79,6 +102,7 @@ public sealed class AudioVolumeMonitorService : IDisposable
         try { _device.Dispose(); }
         catch { }
         _device = null;
+        HeadphonesConnected = false;
     }
 
     public void Dispose()

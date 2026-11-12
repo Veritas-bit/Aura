@@ -22,7 +22,11 @@
         <Grid x:Name="ContentHost">
 
             <!-- ================= СВЁРНУТЫЙ ВИД: одна линия ================= -->
-            <Grid x:Name="CollapsedView" Cursor="Hand" Margin="14,0" Background="#01000000"
+
+            <!-- Six Figma-defined compact layouts. The black Body is the only outer surface.
+                 Actual Body sizes: 215x46, 231x46, 325x24, 325x24, 325x80, 325x80. -->
+            <Grid x:Name="CollapsedView" Width="215" Height="46" Cursor="Hand"
+                  Background="#01000000" ClipToBounds="True"
                   HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Grid.ContextMenu>
                     <ContextMenu x:Name="IslandMenu">
@@ -33,136 +37,226 @@
                     </ContextMenu>
                 </Grid.ContextMenu>
 
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <!-- Одинаковые отступы: 14 px от краёв тела и между всеми элементами -->
-                <StackPanel x:Name="CollapsedStack" Grid.Row="0" Orientation="Horizontal"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- Основное время не имеет фона и не резервирует место для секунд. -->
-                    <StackPanel x:Name="CollapsedClockBlock" Orientation="Horizontal"
-                                VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock x:Name="ClockText" Text="22:06"
-                                   FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
-                                   TextAlignment="Center" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" Width="46"
-                                   Typography.NumeralAlignment="Tabular"/>
-                        <!-- Секунды — отдельная компактная плашка, занимающая место только когда включена. -->
-                        <Border x:Name="ClockSecondsBlock" Width="20" Height="18" CornerRadius="6"
-                                Background="{DynamicResource BgCardBrush}" Margin="2,0,0,0"
-                                VerticalAlignment="Center" Visibility="Collapsed">
-                            <TextBlock x:Name="ClockSeconds" Text=":03"
-                                       FontFamily="Consolas" FontSize="9"
-                                       Foreground="{DynamicResource TextSecBrush}"
-                                       VerticalAlignment="Center" HorizontalAlignment="Center"
-                                       TextAlignment="Center"/>
+                <!-- State 1/2: clock, optional 16 DIP seconds, capsule eyes, battery. -->
+                <Grid x:Name="CollapsedStack" Width="215" Height="46" VerticalAlignment="Center"
+                      HorizontalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="30"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel x:Name="CollapsedClockBlock" Grid.Column="0" Orientation="Horizontal"
+                                Margin="16,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="ClockText" Text="22:06" Width="48" FontFamily="Consolas"
+                                   FontSize="15" FontWeight="SemiBold" TextAlignment="Center"
+                                   VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                        <Border x:Name="ClockSecondsBlock" Width="16" Height="18" CornerRadius="5"
+                                Background="{DynamicResource BgCardBrush}" VerticalAlignment="Center"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="ClockSeconds" Text="03" FontFamily="Consolas" FontSize="9"
+                                       Foreground="{DynamicResource TextSecBrush}" TextAlignment="Center"
+                                       VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
-
-                    <Border x:Name="ClockDivider" Width="1" Height="22" Background="{DynamicResource BorderSoftBrush}"
-                            Margin="14,0,12,0" VerticalAlignment="Center"/>
-                    <controls:CapsuleEyesControl x:Name="CompanionEyes" Width="30" Height="22"
+                    <Border x:Name="ClockDivider" Grid.Column="1" Width="1" Height="22"
+                            Background="{DynamicResource BorderSoftBrush}"
+                            Margin="12,0,11,0" VerticalAlignment="Center"/>
+                    <controls:CapsuleEyesControl x:Name="CompanionEyes" Grid.Column="2"
+                                                  Width="30" Height="22"
                                                   AccentBrush="{DynamicResource AccentBrush}"
                                                   VerticalAlignment="Center" ToolTip="AURA Companion"/>
-                    <!-- Батарея + статус-бар — единый блок справа -->
-                    <StackPanel x:Name="StatsPanel" Orientation="Horizontal" Margin="14,0,0,0">
+                    <StackPanel x:Name="StatsPanel" Grid.Column="4" Orientation="Horizontal"
+                                Margin="0,0,16,0" VerticalAlignment="Center">
                         <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center">
                             <Path x:Name="BatteryIcon" Style="{StaticResource VecIcon}" Width="15" Height="15"
                                   Data="{StaticResource ic_battery_full}" Fill="{DynamicResource TextSecBrush}"/>
-                            <TextBlock x:Name="BatteryText" Text="100%" FontSize="12" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextSecBrush}" Margin="4,0,0,0"/>
+                            <TextBlock x:Name="BatteryText" Text="100%" FontSize="12"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource TextSecBrush}"
+                                       Margin="4,0,0,0"/>
                         </StackPanel>
                     </StackPanel>
-                    <StackPanel x:Name="CollapsedWeatherPanel" Orientation="Horizontal" Margin="14,0,0,0"
+                    <!-- Kept for weather/game-mode settings; not displayed in the six fixed-size layouts. -->
+                    <StackPanel x:Name="CollapsedWeatherPanel" Grid.Column="3" Orientation="Horizontal"
                                 VerticalAlignment="Center" Visibility="Collapsed">
-                        <Path x:Name="CollapsedWeatherIcon" Style="{StaticResource VecIcon}" Width="16" Height="16"
-                              Data="{StaticResource ic_cloud_sun}" Fill="{DynamicResource AccentBrush}"/>
-                        <TextBlock x:Name="CollapsedWeatherText" Text="--°" FontSize="12"
-                                   VerticalAlignment="Center" Foreground="{DynamicResource TextSecBrush}"
-                                   Margin="5,0,0,0"/>
+                        <Path x:Name="CollapsedWeatherIcon" Style="{StaticResource VecIcon}"
+                              Width="16" Height="16" Data="{StaticResource ic_cloud_sun}"
+                              Fill="{DynamicResource AccentBrush}"/>
+                        <TextBlock x:Name="CollapsedWeatherText" Text="--°" FontSize="12" Margin="5,0,0,0"
+                                   Foreground="{DynamicResource TextSecBrush}"/>
                     </StackPanel>
-                </StackPanel>
-                <Grid x:Name="CollapsedTrackView" Grid.Row="0" Visibility="Collapsed" ClipToBounds="True"
-                      HorizontalAlignment="Stretch" VerticalAlignment="Top">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                </Grid>
+
+                <!-- State 3: 325x24, interactive volume slider, not a 62px generic notification. -->
+                <Grid x:Name="VolumeIslandView" Width="325" Height="24" Visibility="Collapsed"
+                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="30"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="51"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Style="{StaticResource VecIcon}" Width="14" Height="14"
+                          Data="{StaticResource ic_volume}" Fill="{DynamicResource TextSecBrush}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Slider x:Name="IslandVolumeSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                            Height="18" Margin="0,0,7,0" VerticalAlignment="Center"
+                            IsMoveToPointEnabled="True" Cursor="Arrow" ToolTip="Громкость Windows"
+                            ValueChanged="IslandVolumeSlider_ValueChanged">
+                        <Slider.Template>
+                            <ControlTemplate TargetType="{x:Type Slider}">
+                                <Grid Background="#01000000">
+                                    <Track x:Name="PART_Track" Height="14" VerticalAlignment="Center">
+                                        <Track.DecreaseRepeatButton>
+                                            <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                                          Focusable="False">
+                                                <RepeatButton.Template>
+                                                    <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                                        <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                                                Background="{DynamicResource AccentBrush}"/>
+                                                    </ControlTemplate>
+                                                </RepeatButton.Template>
+                                            </RepeatButton>
+                                        </Track.DecreaseRepeatButton>
+                                        <Track.Thumb>
+                                            <Thumb Width="7" Height="14">
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="{x:Type Thumb}">
+                                                        <Border Width="7" Height="14" CornerRadius="3.5"
+                                                                Background="{DynamicResource TextPriBrush}"/>
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                        </Track.Thumb>
+                                        <Track.IncreaseRepeatButton>
+                                            <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                                          Focusable="False">
+                                                <RepeatButton.Template>
+                                                    <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                                        <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                                                Background="{DynamicResource OverlayFaintBrush}"/>
+                                                    </ControlTemplate>
+                                                </RepeatButton.Template>
+                                            </RepeatButton>
+                                        </Track.IncreaseRepeatButton>
+                                    </Track>
+                                </Grid>
+                            </ControlTemplate>
+                        </Slider.Template>
+                    </Slider>
+                    <TextBlock x:Name="VolumeLevelText" Grid.Column="2" Text="50%" FontSize="11"
+                               Foreground="{DynamicResource TextPriBrush}" FontFamily="Consolas"
+                               TextAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+
+                <!-- State 4: 325x24 mini music strip. Headphone icon & vertical bars are
+                     only visible when the selected Windows output is identified as headphones. -->
+                <Grid x:Name="CollapsedTrackView" Width="325" Height="24" Visibility="Collapsed"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="TrackCoverFrame" Grid.Row="0" Grid.RowSpan="2" Width="30" Height="30" CornerRadius="7"
-                            Background="{DynamicResource BgDeepBrush}" ClipToBounds="True"
-                            Visibility="Collapsed" Margin="0,0,8,0" HorizontalAlignment="Left"
-                            VerticalAlignment="Stretch">
-                        <Grid>
-                            <Image x:Name="CollapsedTrackCover" Stretch="UniformToFill" Visibility="Collapsed"/>
-                            <Path x:Name="TrackCoverFallback" Style="{StaticResource VecIcon}" Width="16" Height="16"
-                                  Data="{StaticResource ic_music}" Fill="{DynamicResource AccentBrush}"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Grid>
-                    </Border>
-                    <Path x:Name="TrackHeadphonesIcon" Grid.Row="0" Grid.Column="0"
-                          Style="{StaticResource VecIcon}" Width="15" Height="15"
-                          Data="{StaticResource ic_headphones}" Fill="{DynamicResource TextSecBrush}"
-                          Margin="0,0,8,0" HorizontalAlignment="Left" VerticalAlignment="Center"
-                          Visibility="Collapsed"/>
-                    <Grid x:Name="TrackTextViewport" Grid.Row="0" Grid.Column="1" ClipToBounds="True"
-                          VerticalAlignment="Center" Margin="0,0,10,0">
-                        <StackPanel x:Name="TrackTextStrip" Orientation="Horizontal"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center">
-                            <TextBlock x:Name="CollapsedTrackTitle" FontSize="12" FontWeight="SemiBold"
+                    <StackPanel x:Name="HeadphoneStatus" Grid.Column="0" Orientation="Horizontal"
+                                Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                        <Path x:Name="TrackHeadphonesIcon" Style="{StaticResource VecIcon}"
+                              Width="14" Height="14" Data="{StaticResource ic_headphones}"
+                              Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                        <StackPanel Margin="5,0,0,0" VerticalAlignment="Center" Width="5" Height="14"
+                                    Orientation="Vertical">
+                            <Rectangle x:Name="HeadphoneVolumeHigh" Width="4" Height="3"
+                                       RadiusX="1" RadiusY="1" Margin="0,0,0,2"
+                                       Fill="{DynamicResource AccentBrush}" Opacity="0.25"/>
+                            <Rectangle x:Name="HeadphoneVolumeMid" Width="4" Height="3"
+                                       RadiusX="1" RadiusY="1" Margin="0,0,0,2"
+                                       Fill="{DynamicResource AccentBrush}" Opacity="0.25"/>
+                            <Rectangle x:Name="HeadphoneVolumeLow" Width="4" Height="3"
+                                       RadiusX="1" RadiusY="1"
+                                       Fill="{DynamicResource AccentBrush}" Opacity="0.25"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Grid x:Name="TrackTextViewport" Grid.Column="1" ClipToBounds="True"
+                          Margin="12,0,12,0" VerticalAlignment="Center">
+                        <StackPanel x:Name="TrackTextStrip" Orientation="Horizontal" VerticalAlignment="Center"
+                                    HorizontalAlignment="Left">
+                            <TextBlock x:Name="CollapsedTrackTitle" FontSize="11" FontWeight="SemiBold"
                                        TextWrapping="NoWrap" VerticalAlignment="Center"/>
                             <Border Width="28"/>
-                            <TextBlock x:Name="RepeatedTrackTitle" FontSize="12" FontWeight="SemiBold"
+                            <TextBlock x:Name="RepeatedTrackTitle" FontSize="11" FontWeight="SemiBold"
                                        TextWrapping="NoWrap" VerticalAlignment="Center"/>
                             <StackPanel.RenderTransform>
                                 <TranslateTransform x:Name="TrackTextTransform"/>
                             </StackPanel.RenderTransform>
                         </StackPanel>
                     </Grid>
-                    <Canvas x:Name="TrackEqualizer" Grid.Row="1" Grid.Column="1" Height="6"
-                            Margin="0,0,10,2" ClipToBounds="True" IsHitTestVisible="False" Visibility="Collapsed"/>
+                    <!-- Legacy media visuals remain non-rendering for existing event handlers. -->
+                    <Border x:Name="TrackCoverFrame" Visibility="Collapsed" Width="0" Height="0">
+                        <Grid>
+                            <Image x:Name="CollapsedTrackCover"/>
+                            <Path x:Name="TrackCoverFallback" Style="{StaticResource VecIcon}"
+                                  Data="{StaticResource ic_music}"/>
+                        </Grid>
+                    </Border>
+                    <Canvas x:Name="TrackEqualizer" Visibility="Collapsed" Width="0" Height="0"/>
                 </Grid>
-                <Border x:Name="TransientCardView" Grid.Row="0" Grid.RowSpan="2"
-                        Width="330" Height="62" Padding="9" CornerRadius="16"
-                        Background="{DynamicResource BgCardBrush}"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Visibility="Collapsed" Opacity="0" ClipToBounds="True">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="46"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="44" Height="44" CornerRadius="10"
-                                Background="{DynamicResource BgDeepBrush}" ClipToBounds="True"
-                                VerticalAlignment="Center">
-                            <Grid>
-                                <Image x:Name="TransientArtwork" Stretch="UniformToFill" Visibility="Collapsed"/>
-                                <TextBlock x:Name="TransientGlyph" Text="♪" FontSize="25"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-                        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
-                            <TextBlock x:Name="TransientTitle" FontSize="12" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPriBrush}" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="TransientSubtitle" FontSize="10"
-                                       Foreground="{DynamicResource TextSecBrush}" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="TransientDetails" FontSize="9"
-                                       Foreground="{DynamicResource TextSecBrush}" TextTrimming="CharacterEllipsis"/>
-                            <Border x:Name="TransientProgressTrack" Height="3" Margin="0,4,0,0"
-                                    CornerRadius="2" Background="{DynamicResource OverlayFaintBrush}"
-                                    HorizontalAlignment="Stretch" Visibility="Collapsed">
-                                <Border x:Name="TransientProgressFill" Width="0" Height="3"
-                                        CornerRadius="2" Background="{DynamicResource AccentBrush}"
-                                        HorizontalAlignment="Left"/>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+
+                <!-- State 5: 325x80 track card, on track change, then mini player. -->
+                <Grid x:Name="FullTrackCardView" Width="325" Height="80" Visibility="Collapsed"
+                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="78"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="64" Height="64" CornerRadius="11" Margin="8,0,0,0"
+                            Background="{DynamicResource BgCardBrush}" ClipToBounds="True"
+                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Grid>
+                            <Image x:Name="FullTrackArtwork" Stretch="UniformToFill"/>
+                            <Path x:Name="FullTrackFallback" Width="25" Height="25"
+                                  Style="{StaticResource VecIcon}" Data="{StaticResource ic_music}"
+                                  Fill="{DynamicResource AccentBrush}"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="2,0,12,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="FullTrackTitle" FontSize="13" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPriBrush}"/>
+                        <TextBlock x:Name="FullTrackArtist" FontSize="11" Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecBrush}"/>
+                        <TextBlock x:Name="FullTrackAlbum" FontSize="10" Margin="0,3,0,0"
+                                   Visibility="Collapsed" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextSecBrush}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- State 6: 325x80 Windows notification. -->
+                <Grid x:Name="NotificationIslandView" Width="325" Height="80"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="58"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="38" Height="38" CornerRadius="12"
+                            Margin="12,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Background="{DynamicResource AccentSoftBrush}">
+                        <Path Width="20" Height="20" Fill="{DynamicResource AccentBrush}"
+                              Data="M12,22 C13.1,22 14,21.1 14,20 H10 C10,21.1 10.9,22 12,22 Z
+                                    M18,16 V11 C18,7.9 16.4,5.3 13.5,4.6 V4 C13.5,3.2 12.8,2.5 12,2.5
+                                    C11.2,2.5 10.5,3.2 10.5,4 V4.6 C7.6,5.3 6,7.9 6,11 V16
+                                    L4,18 V19 H20 V18 Z"
+                              Stretch="Uniform"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="NotificationAppName" FontSize="10" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AccentBrush}"/>
+                        <TextBlock x:Name="NotificationTitle" FontSize="12" FontWeight="SemiBold"
+                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextPriBrush}"/>
+                        <TextBlock x:Name="NotificationBody" FontSize="10" Margin="0,2,0,0"
+                                   TextWrapping="Wrap" MaxHeight="27"
+                                   Foreground="{DynamicResource TextSecBrush}"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
 
             <!-- ================= РАЗВЁРНУТЫЙ ВИД ================= -->

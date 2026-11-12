@@ -54,7 +54,7 @@ public partial class MainWindow : Window
     private bool _volumeEventsAttached;
 
     // Геометрия свёрнутого вида
-    private const double CollapsedH = 40;
+    private const double CollapsedH = 46;
     private const double GameH = 30;
     private const double BodyGap = 14;
     private const double CollapsedBaseW = 172;
@@ -90,6 +90,7 @@ public partial class MainWindow : Window
         _transientTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _transientTimer.Tick += (_, _) => HideTransientCard();
         _volumeMonitor.VolumeChanged += OnSystemVolumeChanged;
+        _volumeMonitor.OutputDeviceChanged += OnOutputDeviceChanged;
         _volumeEventsAttached = true;
         // Audio endpoint change detection only; volume changes use CoreAudio callbacks.
         _volumePollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -134,6 +135,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             UpdateCollapsedWidth(animate: false);
+            UpdateTrackDisplay();
             ApplyShape();
             await InitializeNotificationsAsync();
         };
@@ -186,7 +188,10 @@ public partial class MainWindow : Window
             _transientTimer.Stop();
             _volumePollTimer.Stop();
             if (_volumeEventsAttached)
+            {
                 _volumeMonitor.VolumeChanged -= OnSystemVolumeChanged;
+                _volumeMonitor.OutputDeviceChanged -= OnOutputDeviceChanged;
+            }
             _volumeMonitor.Dispose();
             _notificationListener.NotificationReceived -= OnDesktopNotificationReceived;
             _notificationListener.Dispose();
@@ -230,8 +235,10 @@ public partial class MainWindow : Window
     private bool ShowTrack => !_gameMode && _currentMedia.IsPlaying && _currentMedia.HasTrack;
     private int TrackDisplayMode =>
         AppSettings.NormalizeTrackDisplayMode(SettingsService.Current.CollapsedTrackDisplayMode);
-    private bool ShowTrackCover => ShowTrack && TrackDisplayMode >= 2;
-    private bool ShowTrackEqualizer => ShowTrack && TrackDisplayMode == 3;
+    // All media sessions use the single 325x24 Figma mini-player. Legacy cover/equalizer
+    // settings no longer affect the six compact visual states.
+    private bool ShowTrackCover => false;
+    private bool ShowTrackEqualizer => false;
     private double UiScale
     {
         get
@@ -240,38 +247,30 @@ public partial class MainWindow : Window
                 SystemParameters.PrimaryScreenHeight / 1080.0), 0.65, 1.3);
         }
     }
-    private double CollapsedHeight => _gameMode
-        ? GameH * UiScale
-        : _transientKind != TransientCardKind.None ? 68 * UiScale
-        : !ShowTrack ? CollapsedH * UiScale
-        : (ShowTrackCover ? 32 : 30) * UiScale + (ShowTrackEqualizer ? 8 * UiScale : 0);
-    private double CollapsedContentInset => _transientKind != TransientCardKind.None ? 0
-        : ShowTrackCover
-        ? 0
-        : IsNotch ? (NotchShoulder + 8) * UiScale : BodyGap * UiScale;
+    // Figma dimensions are WPF device-independent pixels, not content + padding.
+    private (double Width, double Height) TargetCollapsedSize()
+    {
+        if (_gameMode) return (CollapsedBaseW + 3 * StatItemW, GameH * UiScale);
+        return _transientKind switch
+        {
+            TransientCardKind.Volume => (325, 24),
+            TransientCardKind.Track => (325, 80),
+            TransientCardKind.Notification => (325, 80),
+            _ when ShowTrack => (325, 24),
+            _ when SettingsService.Current.ShowClock && SettingsService.Current.ShowSeconds
+                => (231, 46),
+            _ => (215, 46)
+        };
+    }
+
+    private double CollapsedHeight => CompactHeight > 0 ? CompactHeight : TargetCollapsedSize().Height;
+    private double CollapsedContentInset => 0;
     private double ExpandedContentW => Math.Min(ExpandedContentWBase * UiScale, SystemParameters.WorkArea.Width * 0.84);
 
     /// <summary>Ширина содержимого: замер реального контента.
     /// До первой раскладки — оценка: базовые 172 плюс элементы статус-бара.</summary>
-    private double CollapsedContentW()
-    {
-        if (_transientKind != TransientCardKind.None) return 330 * UiScale;
-        if (CollapsedWidth > 4) return CollapsedWidth;
-
-        if (IsLoaded)
-        {
-            CollapsedStack.Measure(new Size(double.PositiveInfinity, CollapsedHeight));
-            if (CollapsedStack.DesiredSize.Width > 4)
-                return CollapsedStack.DesiredSize.Width;
-        }
-
-        var s = SettingsService.Current;
-        if (!s.ShowStats) return CollapsedBaseW;
-        int n = (s.StatCpu ? 1 : 0) + (s.StatRam ? 1 : 0)
-              + (s.StatGpu && _monitor.Stats.GpuAvailable ? 1 : 0);
-        if (_gameMode) n += 4; // температура CPU/GPU, ping, потери
-        return CollapsedBaseW + n * StatItemW;
-    }
+    private double CollapsedContentW() =>
+        CollapsedWidth > 0 ? CollapsedWidth : TargetCollapsedSize().Width;
 
     private double ExpandedContentH()
     {
@@ -303,6 +302,16 @@ public partial class MainWindow : Window
         set => SetValue(CollapsedWidthProperty, value);
     }
 
+    private static readonly DependencyProperty CompactHeightProperty = DependencyProperty.Register(
+        nameof(CompactHeight), typeof(double), typeof(MainWindow),
+        new PropertyMetadata(0.0, (d, _) => ((MainWindow)d).ApplyShape()));
+
+    private double CompactHeight
+    {
+        get => (double)GetValue(CompactHeightProperty);
+        set => SetValue(CompactHeightProperty, value);
+    }
+
     /// <summary>0 = свёрнутый островок, 1 = развёрнутая панель.</summary>
     public double Progress
     {
@@ -326,7 +335,7 @@ public partial class MainWindow : Window
         // свёрнутое тело обнимает контент ровно на BodyGap — отступы от края
         // равны отступам между элементами; margin здесь не участвует
         double collapsedInset = CollapsedContentInset;
-        double collapsedW = Math.Max(200 * UiScale, contentW + 2 * collapsedInset);
+        double collapsedW = Math.Max(1, contentW + 2 * collapsedInset);
         double collapsedH = CollapsedHeight;
         double expandedW = ExpandedContentW + 2 * margin;
         double expandedH = ExpandedContentH();
@@ -354,31 +363,7 @@ public partial class MainWindow : Window
         CollapsedView.Margin = new Thickness(x + collapsedInset, y, 0, 0);
         CollapsedView.Width = Math.Max(1, contentW);
         CollapsedView.Height = collapsedH;
-        if (ShowTrack && _transientKind == TransientCardKind.None)
-        {
-            var trackClip = Body.Data.Clone();
-            trackClip.Transform = new TranslateTransform(
-                Body.Margin.Left - CollapsedView.Margin.Left,
-                Body.Margin.Top - CollapsedView.Margin.Top);
-            CollapsedTrackView.Clip = trackClip;
-
-            if (ShowTrackCover)
-            {
-                double coverWidth = contentW / 6;
-                double coverHeight = collapsedH;
-                TrackCoverFrame.Width = coverWidth;
-                TrackCoverFrame.Height = coverHeight;
-                TrackCoverFrame.Margin = new Thickness(0, 0, 8 * UiScale, 0);
-                TrackCoverFrame.Clip = new CombinedGeometry(
-                    GeometryCombineMode.Intersect,
-                    new RectangleGeometry(new Rect(0, 0, coverWidth, coverHeight)),
-                    trackClip.Clone());
-            }
-        }
-        else
-        {
-            CollapsedTrackView.Clip = null;
-        }
+        CollapsedTrackView.Clip = null;
         // Clear the old layout first, morph the surface, then reveal the new layout.
         CollapsedView.Opacity = SmoothStep(Math.Clamp((0.16 - c) / 0.16, 0, 1));
         CollapsedView.IsHitTestVisible = !_expanded && c < 0.1;
@@ -449,9 +434,9 @@ public partial class MainWindow : Window
         UpdateAudioAnalysis();
 
         bool game = _gameMode && s.ShowStats;
-        SetStatVisible("cpu", s.ShowStats && s.StatCpu);
-        SetStatVisible("ram", s.ShowStats && s.StatRam);
-        SetStatVisible("gpu", s.ShowStats && s.StatGpu && _monitor.Stats.GpuAvailable);
+        SetStatVisible("cpu", game && s.StatCpu);
+        SetStatVisible("ram", game && s.StatRam);
+        SetStatVisible("gpu", game && s.StatGpu && _monitor.Stats.GpuAvailable);
         SetStatVisible("cput", game);
         SetStatVisible("gput", game);
         SetStatVisible("ping", game);
@@ -474,63 +459,40 @@ public partial class MainWindow : Window
 
     private void UpdateCollapsedWidth(bool animate)
     {
-        if (!IsLoaded) return;
+        var target = TargetCollapsedSize();
+        CollapsedStack.Width = target.Width;
 
-        CollapsedStack.Visibility = Visibility.Hidden;
-        CollapsedStack.Measure(new Size(double.PositiveInfinity, CollapsedH * UiScale));
-        double normalContentWidth = CollapsedStack.DesiredSize.Width;
-        CollapsedStack.Visibility = _transientKind != TransientCardKind.None || ShowTrack
-            ? Visibility.Collapsed : Visibility.Visible;
-
-        double inset = CollapsedContentInset;
-        double minimumContentWidth = Math.Max(0, 200 * UiScale - inset * 2);
-        double target;
-        if (_transientKind != TransientCardKind.None)
-        {
-            target = 330 * UiScale;
-            TransientCardView.Width = target;
-        }
-        else if (ShowTrack)
-        {
-            CollapsedTrackTitle.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double titleWidth = CollapsedTrackTitle.DesiredSize.Width;
-            bool hasCover = ShowTrackCover;
-            double standardBodyWidth = Math.Max(200 * UiScale, normalContentWidth + inset * 2);
-            double maxBodyWidth = Math.Min(standardBodyWidth * 3,
-                SystemParameters.WorkArea.Width * 0.84);
-            double maxContentWidth = Math.Max(minimumContentWidth, maxBodyWidth - inset * 2);
-            double naturalTrackWidth = hasCover
-                ? (titleWidth + 18 * UiScale) * 6 / 5
-                : titleWidth + 24 * UiScale;
-            target = Math.Clamp(naturalTrackWidth, minimumContentWidth, maxContentWidth);
-            CollapsedTrackView.Width = target;
-            double coverWidth = hasCover ? target / 6 : 0;
-            TrackCoverFrame.Width = coverWidth;
-        }
-        else
-        {
-            target = Math.Max(minimumContentWidth, normalContentWidth);
-        }
-
-        double current = CollapsedWidth > 4 ? CollapsedWidth : target;
-        if (!animate || Math.Abs(target - current) < 0.5)
+        double currentW = CollapsedWidth > 0 ? CollapsedWidth : target.Width;
+        double currentH = CompactHeight > 0 ? CompactHeight : target.Height;
+        if (!animate || !IsLoaded)
         {
             BeginAnimation(CollapsedWidthProperty, null);
-            CollapsedWidth = target;
+            BeginAnimation(CompactHeightProperty, null);
+            CollapsedWidth = target.Width;
+            CompactHeight = target.Height;
             return;
         }
 
-        var animation = new DoubleAnimation
+        var easing = new CubicBezierEase { X1 = 0.2, Y1 = 0.7, X2 = 0.2, Y2 = 1 };
+        if (Math.Abs(currentW - target.Width) > 0.25)
+            BeginAnimation(CollapsedWidthProperty, new DoubleAnimation(
+                currentW, target.Width, TimeSpan.FromMilliseconds(280))
+            { EasingFunction = easing, FillBehavior = FillBehavior.HoldEnd });
+        else
         {
-            From = current,
-            To = target,
-            Duration = TimeSpan.FromMilliseconds(280),
-            EasingFunction = new CubicBezierEase { X1 = 0.2, Y1 = 0.7, X2 = 0.2, Y2 = 1 },
-            FillBehavior = FillBehavior.HoldEnd
-        };
-        animation.Completed += (_, _) =>
-            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
-        BeginAnimation(CollapsedWidthProperty, animation);
+            BeginAnimation(CollapsedWidthProperty, null);
+            CollapsedWidth = target.Width;
+        }
+
+        if (Math.Abs(currentH - target.Height) > 0.25)
+            BeginAnimation(CompactHeightProperty, new DoubleAnimation(
+                currentH, target.Height, TimeSpan.FromMilliseconds(280))
+            { EasingFunction = easing, FillBehavior = FillBehavior.HoldEnd });
+        else
+        {
+            BeginAnimation(CompactHeightProperty, null);
+            CompactHeight = target.Height;
+        }
     }
 
     private void OnWeatherUpdated() => Dispatcher.BeginInvoke(
@@ -544,7 +506,7 @@ public partial class MainWindow : Window
     private void UpdateCollapsedWeather()
     {
         var weather = WeatherService.Info;
-        bool show = SettingsService.Current.ShowWeatherInIsland && weather.Available;
+        bool show = _gameMode && SettingsService.Current.ShowWeatherInIsland && weather.Available;
         CollapsedWeatherPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
         string icon = WeatherService.Describe(weather.Code).Icon;
@@ -665,7 +627,7 @@ public partial class MainWindow : Window
             BatteryText.Text = st.BatteryPercent >= 0 ? $"{st.BatteryPercent}%" : "—";
         }
 
-        bool gpuVisible = s.ShowStats && s.StatGpu && st.GpuAvailable;
+        bool gpuVisible = _gameMode && s.ShowStats && s.StatGpu && st.GpuAvailable;
         if (_statItems.TryGetValue("gpu", out var gpuItem) &&
             (gpuItem.Root.Visibility == Visibility.Visible) != gpuVisible)
             gpuItem.Root.Visibility = gpuVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -695,7 +657,7 @@ public partial class MainWindow : Window
     {
         var now = DateTime.Now;
         ClockText.Text = now.ToString("HH:mm");
-        ClockSeconds.Text = now.ToString(":ss");
+        ClockSeconds.Text = now.ToString("ss");
 
     }
 
@@ -778,34 +740,54 @@ public partial class MainWindow : Window
 
     private void UpdateTrackDisplay()
     {
-        bool showTrack = ShowTrack;
-        bool showTransient = _transientKind != TransientCardKind.None;
+        bool transient = _transientKind != TransientCardKind.None;
+        bool mini = !transient && ShowTrack;
+        bool basic = !transient && !ShowTrack;
+
+        CollapsedStack.Visibility = basic ? Visibility.Visible : Visibility.Collapsed;
+        CollapsedTrackView.Visibility = mini ? Visibility.Visible : Visibility.Collapsed;
+        VolumeIslandView.Visibility = _transientKind == TransientCardKind.Volume
+            ? Visibility.Visible : Visibility.Collapsed;
+        FullTrackCardView.Visibility = _transientKind == TransientCardKind.Track
+            ? Visibility.Visible : Visibility.Collapsed;
+        NotificationIslandView.Visibility = _transientKind == TransientCardKind.Notification
+            ? Visibility.Visible : Visibility.Collapsed;
+
         string title = _currentMedia.Title;
         string artist = _currentMedia.Artist;
         string trackText = string.IsNullOrWhiteSpace(artist) ? title : $"{title} — {artist}";
-        CollapsedStack.Visibility = showTransient || showTrack ? Visibility.Collapsed : Visibility.Visible;
-        CollapsedTrackView.Visibility = showTransient ? Visibility.Collapsed
-            : showTrack ? Visibility.Visible : Visibility.Collapsed;
-        TransientCardView.Visibility = showTransient ? Visibility.Visible : Visibility.Collapsed;
-        TrackCoverFrame.Visibility = ShowTrackCover ? Visibility.Visible : Visibility.Collapsed;
-        TrackHeadphonesIcon.Visibility = showTrack && !ShowTrackCover
-            ? Visibility.Visible : Visibility.Collapsed;
-        SetTrackLabel(CollapsedTrackTitle, showTrack ? title : "", artist);
-        SetTrackLabel(RepeatedTrackTitle, showTrack ? title : "", artist);
-        CollapsedTrackView.ToolTip = showTrack ? trackText : null;
-
-        if (!ReferenceEquals(_displayedArtwork, _currentMedia.Artwork))
-        {
-            _displayedArtwork = _currentMedia.Artwork;
-            CollapsedTrackCover.Source = CreateTrackArtwork(_displayedArtwork);
-        }
-        CollapsedTrackCover.Visibility = CollapsedTrackCover.Source is null
-            ? Visibility.Collapsed : Visibility.Visible;
-        TrackCoverFallback.Visibility = CollapsedTrackCover.Source is null
-            ? Visibility.Visible : Visibility.Collapsed;
+        SetTrackLabel(CollapsedTrackTitle, mini ? title : "", artist);
+        SetTrackLabel(RepeatedTrackTitle, mini ? title : "", artist);
+        CollapsedTrackView.ToolTip = mini ? trackText : null;
         _displayedTrackId = _currentMedia.TrackId;
-        TrackEqualizer.Visibility = ShowTrackEqualizer ? Visibility.Visible : Visibility.Collapsed;
+        _displayedArtwork = _currentMedia.Artwork;
+        TrackEqualizer.Visibility = Visibility.Collapsed;
+        TrackCoverFrame.Visibility = Visibility.Collapsed;
+
+        UpdateHeadphonesIndicator();
         Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+    }
+
+    private void UpdateHeadphonesIndicator()
+    {
+        bool connected = _volumeMonitor.HeadphonesConnected;
+        HeadphoneStatus.Visibility = connected ? Visibility.Visible : Visibility.Collapsed;
+        if (!connected) return;
+
+        double volume = _volumeMonitor.IsMuted ? 0 : _volumeMonitor.CurrentVolumePercent;
+        HeadphoneVolumeLow.Opacity = volume > 0 ? 1 : 0.2;
+        HeadphoneVolumeMid.Opacity = volume >= 34 ? 1 : 0.2;
+        HeadphoneVolumeHigh.Opacity = volume >= 67 ? 1 : 0.2;
+    }
+
+    private bool _updatingVolumeSlider;
+    private void IslandVolumeSlider_ValueChanged(
+        object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_updatingVolumeSlider || !IsLoaded || _transientKind != TransientCardKind.Volume)
+            return;
+        SystemControlService.SetVolumeLevel(Math.Clamp(e.NewValue, 0, 100));
+        VolumeLevelText.Text = $"{Math.Round(e.NewValue):0}%";
     }
 
     private async Task InitializeNotificationsAsync()
@@ -831,9 +813,19 @@ public partial class MainWindow : Window
         }));
     }
 
+    private void OnOutputDeviceChanged()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.DataBind, new Action(OnOutputDeviceChanged));
+            return;
+        }
+        UpdateHeadphonesIndicator();
+    }
+
     private void OnSystemVolumeChanged(double volume, bool muted)
     {
-        // Core Audio notifications may arrive on an audio worker thread.
+        // The Core Audio callback arrives off the WPF dispatcher.
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(DispatcherPriority.Normal,
@@ -841,47 +833,72 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_gameMode || !IsLoaded) return;
-        ShowTransientCard(TransientCardKind.Volume,
-            muted ? "Звук выключен" : "Громкость",
-            muted ? "Без звука" : $"{volume:0}%",
-            "Системный звук", null, TimeSpan.FromSeconds(2),
-            muted ? 0 : volume);
+        UpdateHeadphonesIndicator();
+        if (_gameMode || !IsLoaded || _expanded) return;
+        ShowTransientCard(TransientCardKind.Volume, "",
+            "", "", null, TimeSpan.FromSeconds(2), muted ? 0 : volume);
     }
 
     private void ShowTransientCard(TransientCardKind kind, string title, string subtitle,
         string details, byte[]? artwork, TimeSpan duration, double? progress = null)
     {
-        if (_gameMode) return;
+        if (_gameMode || _expanded) return;
+        // Keep higher-priority information readable if the OS volume changes meanwhile.
+        if (kind == TransientCardKind.Volume &&
+            _transientKind is TransientCardKind.Notification or TransientCardKind.Track)
+            return;
+        if (kind == TransientCardKind.Track && _transientKind == TransientCardKind.Notification)
+            return;
+
         _transientKind = kind;
-        TransientTitle.Text = title;
-        TransientSubtitle.Text = subtitle;
-        TransientDetails.Text = details;
-        TransientGlyph.Text = kind switch
+        switch (kind)
         {
-            TransientCardKind.Volume => "◖",
-            TransientCardKind.Notification => "●",
-            _ => "♪"
-        };
+            case TransientCardKind.Track:
+            {
+                FullTrackTitle.Text = title;
+                FullTrackArtist.Text = subtitle;
+                FullTrackAlbum.Text = details;
+                FullTrackAlbum.Visibility = string.IsNullOrWhiteSpace(details)
+                    ? Visibility.Collapsed : Visibility.Visible;
+                FullTrackArtwork.Source = CreateTrackArtwork(artwork);
+                FullTrackArtwork.Visibility = FullTrackArtwork.Source is null
+                    ? Visibility.Collapsed : Visibility.Visible;
+                FullTrackFallback.Visibility = FullTrackArtwork.Source is null
+                    ? Visibility.Visible : Visibility.Collapsed;
+                break;
+            }
+            case TransientCardKind.Notification:
+                NotificationAppName.Text = title;
+                NotificationTitle.Text = subtitle;
+                NotificationBody.Text = details;
+                NotificationBody.Visibility = string.IsNullOrWhiteSpace(details)
+                    ? Visibility.Collapsed : Visibility.Visible;
+                break;
+            case TransientCardKind.Volume:
+            {
+                double volume = Math.Clamp(progress ?? _volumeMonitor.CurrentVolumePercent, 0, 100);
+                _updatingVolumeSlider = true;
+                try { IslandVolumeSlider.Value = volume; }
+                finally { _updatingVolumeSlider = false; }
+                VolumeLevelText.Text = $"{volume:0}%";
+                break;
+            }
+        }
 
-        var bitmap = CreateTrackArtwork(artwork);
-        TransientArtwork.Source = bitmap;
-        TransientArtwork.Visibility = bitmap is null ? Visibility.Collapsed : Visibility.Visible;
-        TransientGlyph.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
-
-        bool showProgress = kind == TransientCardKind.Volume && progress.HasValue;
-        TransientProgressTrack.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
-        TransientProgressFill.Width = showProgress ? 240 * UiScale * Math.Clamp(progress!.Value, 0, 100) / 100 : 0;
-
-        TransientCardView.Width = 330 * UiScale;
-        TransientCardView.Visibility = Visibility.Visible;
-        TransientCardView.BeginAnimation(UIElement.OpacityProperty, null);
-        TransientCardView.Opacity = 0;
-        TransientCardView.BeginAnimation(UIElement.OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)));
         UpdateTrackDisplay();
-        UpdateCollapsedWidth(animate: !_expanded && !_animating);
+        UpdateCollapsedWidth(animate: !_expanded);
+        var active = kind switch
+        {
+            TransientCardKind.Volume => (UIElement)VolumeIslandView,
+            TransientCardKind.Track => FullTrackCardView,
+            _ => NotificationIslandView
+        };
+        active.BeginAnimation(UIElement.OpacityProperty, null);
+        active.Opacity = 0;
+        active.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170)));
 
+        _hoverExpandTimer.Stop();
         _transientTimer.Stop();
         _transientTimer.Interval = duration;
         _transientTimer.Start();
@@ -892,11 +909,8 @@ public partial class MainWindow : Window
         _transientTimer.Stop();
         if (_transientKind == TransientCardKind.None) return;
         _transientKind = TransientCardKind.None;
-        TransientCardView.BeginAnimation(UIElement.OpacityProperty, null);
-        TransientCardView.Opacity = 0;
-        TransientCardView.Visibility = Visibility.Collapsed;
         UpdateTrackDisplay();
-        UpdateCollapsedWidth(animate: !_expanded && !_animating);
+        UpdateCollapsedWidth(animate: !_expanded);
     }
 
     private void SetTrackLabel(TextBlock block, string title, string artist)
@@ -1210,7 +1224,8 @@ public partial class MainWindow : Window
         {
             _hoverCollapseTimer.Stop();
             // прерывание сворачивания на середине — Expand пойдёт от текущего прогресса
-            if (!_expanded && !_gameMode && !_hoverExpandTimer.IsEnabled)
+            if (!_expanded && !_gameMode && _transientKind == TransientCardKind.None &&
+                !_hoverExpandTimer.IsEnabled)
                 _hoverExpandTimer.Start();
         }
         else
