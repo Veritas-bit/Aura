@@ -72,7 +72,7 @@
                     </Grid>
 
                     <!-- Drawing viewport includes 3 DIP of tracking room around 14x24 eyes. -->
-                    <controls:CapsuleEyesControl x:Name="CompanionEyes" Grid.Column="3"
+                    <controls:CapsuleEyesControl x:Name="CompanionEyes" Grid.Column="0" Grid.ColumnSpan="7" Panel.ZIndex="2"
                                                   Width="60" Height="32"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   AccentBrush="{DynamicResource AccentBrush}"
@@ -94,8 +94,8 @@
                             <TextBlock x:Name="BatteryText" Grid.Column="1" Text="100%"
                                        FontFamily="Inter, Segoe UI" FontSize="8"
                                        FontWeight="SemiBold"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextSecBrush}"/>
+                                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2,3,0,0"
+                                       Foreground="{DynamicResource TextPriBrush}"/>
                         </Grid>
                     </StackPanel>
                     <!-- Optional weather is reserved for the existing alternate game mode. -->
@@ -121,7 +121,7 @@
                     </Grid.ColumnDefinitions>
                     <Path x:Name="VolumeIslandIcon" Grid.Column="0"
                           Style="{StaticResource VecIcon}" Width="12" Height="12"
-                          Data="{StaticResource ic_volume_2}"
+                          Data="{StaticResource ic_aura_volume}"
                           HorizontalAlignment="Left" VerticalAlignment="Center"
                           Margin="14,0,0,0" Fill="{DynamicResource TextSecBrush}"/>
                     <Grid x:Name="VolumeBarTrack" Grid.Column="1" Height="4"
@@ -222,33 +222,90 @@
                     <Canvas x:Name="TrackEqualizer" Visibility="Collapsed" Width="0" Height="0"/>
                 </Grid>
 
-                <!-- State 5: 325x80 track card, on track change, then mini player. -->
-                <Grid x:Name="FullTrackCardView" Width="325" Height="80" Visibility="Collapsed"
-                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- State 5: 325x80 reference track card; artwork 60x60, inset 12/10. -->
+                <Grid x:Name="FullTrackCardView" Width="325" Height="80"
+                      Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="78"/>
+                        <ColumnDefinition Width="84"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="45"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Width="64" Height="64" CornerRadius="11" Margin="8,0,0,0"
-                            Background="{DynamicResource BgCardBrush}" ClipToBounds="True"
+                    <!-- Use a RectangleGeometry clip: WPF Border.ClipToBounds alone does not
+                         clip Image pixels to the rounded CornerRadius. -->
+                    <Border Grid.Column="0" Width="60" Height="60" CornerRadius="10"
+                            Margin="12,10,0,10" Background="{DynamicResource BgCardBrush}"
                             HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <Grid>
-                            <Image x:Name="FullTrackArtwork" Stretch="UniformToFill"/>
-                            <Path x:Name="FullTrackFallback" Width="25" Height="25"
+                        <Grid Width="60" Height="60">
+                            <Image x:Name="FullTrackArtwork" Stretch="UniformToFill"
+                                   Width="60" Height="60">
+                                <Image.Clip>
+                                    <RectangleGeometry Rect="0,0,60,60" RadiusX="10" RadiusY="10"/>
+                                </Image.Clip>
+                            </Image>
+                            <Path x:Name="FullTrackFallback" Width="22" Height="22"
                                   Style="{StaticResource VecIcon}" Data="{StaticResource ic_music}"
                                   Fill="{DynamicResource AccentBrush}"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                     </Border>
-                    <StackPanel Grid.Column="1" Margin="2,0,12,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="FullTrackTitle" FontSize="13" FontWeight="SemiBold"
-                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPriBrush}"/>
-                        <TextBlock x:Name="FullTrackArtist" FontSize="11" Margin="0,3,0,0"
-                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecBrush}"/>
-                        <TextBlock x:Name="FullTrackAlbum" FontSize="10" Margin="0,3,0,0"
-                                   Visibility="Collapsed" TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource TextSecBrush}"/>
-                    </StackPanel>
+                    <Grid Grid.Column="1" Margin="0,11,0,11">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="20"/>
+                            <RowDefinition Height="17"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="FullTrackTitle" Grid.Row="0"
+                                   FontFamily="Inter, Segoe UI" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPriBrush}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="FullTrackArtist" Grid.Row="0" Visibility="Collapsed"/>
+                        <TextBlock x:Name="FullTrackAlbum" Grid.Row="1" FontSize="10"
+                                   FontFamily="Inter, Segoe UI" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextSecBrush}" VerticalAlignment="Center"
+                                   Visibility="Collapsed"/>
+                        <Grid Grid.Row="2" VerticalAlignment="Bottom" Height="13">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="TrackCardPosition" Grid.Column="0" Text="00:00"
+                                       FontFamily="Inter, Segoe UI" FontSize="9"
+                                       Foreground="{DynamicResource TextPriBrush}" VerticalAlignment="Center"/>
+                            <Grid x:Name="TrackCardProgressTrack" Grid.Column="1" Height="3"
+                                  Margin="1,0,6,0" Background="{DynamicResource OverlayFaintBrush}"
+                                  VerticalAlignment="Center" ClipToBounds="True">
+                                <Border x:Name="TrackCardProgressFill" Width="0" Height="3"
+                                        Background="{DynamicResource TextPriBrush}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        CornerRadius="1.5"/>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                    <Grid Grid.Column="2" Margin="3,10,8,10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="20"/>
+                            <RowDefinition Height="20"/>
+                            <RowDefinition Height="20"/>
+                        </Grid.RowDefinitions>
+                        <Path x:Name="TrackCardHeadphones" Grid.Row="0"
+                              Style="{StaticResource VecIcon}" Data="{StaticResource ic_aura_headphones}"
+                              Fill="{DynamicResource TextPriBrush}" Width="18" Height="17"
+                              HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                    HorizontalAlignment="Center" ToolTip="Заряд батареи компьютера">
+                            <Path x:Name="TrackCardBatteryIcon" Style="{StaticResource VecIcon}"
+                                  Data="{StaticResource ic_aura_battery}" Width="17" Height="10"
+                                  Fill="{DynamicResource TextPriBrush}"/>
+                            <TextBlock x:Name="TrackCardBatteryPercent" FontSize="8" Margin="2,0,0,0"
+                                       Foreground="{DynamicResource TextPriBrush}" VerticalAlignment="Center"
+                                       Text="" />
+                        </StackPanel>
+                        <Path Grid.Row="2" Style="{StaticResource VecIcon}"
+                              Data="{StaticResource ic_aura_bell}" Width="14" Height="14"
+                              Fill="{DynamicResource TextPriBrush}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              ToolTip="Уведомления Windows"/>
+                    </Grid>
                 </Grid>
 
                 <!-- State 6: 325x80 Windows notification. -->

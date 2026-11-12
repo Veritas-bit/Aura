@@ -90,6 +90,7 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
         VolumeBarTrack.SizeChanged += (_, _) => UpdateVolumeBar();
         BrightnessBarTrack.SizeChanged += (_, _) => UpdateBrightnessBar();
+        TrackCardProgressTrack.SizeChanged += (_, _) => UpdateTrackCardTimeline();
         Width = WindowW();
         Height = WindowH();
         BuildStatsStrip();
@@ -127,13 +128,23 @@ public partial class MainWindow : Window
         ApplyShape();
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _clockTimer.Tick += (_, _) => TickClock();
+        _clockTimer.Tick += (_, _) =>
+        {
+            TickClock();
+            UpdateTrackCardTimeline();
+        };
         _clockTimer.Start();
 
         // Наведение мыши: развернуть; убирание — свернуть (с задержками).
         // Отслеживание — опросом (WPF-события на layered-окне нестабильны).
         _hoverExpandTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
-        _hoverExpandTimer.Tick += (_, _) => { _hoverExpandTimer.Stop(); Expand(); };
+        _hoverExpandTimer.Tick += (_, _) =>
+        {
+            _hoverExpandTimer.Stop();
+            if (_transientKind == TransientCardKind.Track)
+                HideTransientCard();
+            Expand(ShowTrack ? "player" : "home");
+        };
         _hoverCollapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(320) };
         _hoverCollapseTimer.Tick += (_, _) =>
         {
@@ -693,7 +704,10 @@ public partial class MainWindow : Window
             Brush batteryColor = st.BatteryPercent <= 20 ? BatteryLowColor
                 : st.BatteryPercent <= 80 ? BatteryMidColor : BatteryHighColor;
             BatteryIcon.Fill = batteryColor;
-            BatteryText.Foreground = batteryColor;
+            BatteryText.Foreground = (Brush)FindResource("TextPriBrush");
+            TrackCardBatteryIcon.Fill = batteryColor;
+            TrackCardBatteryPercent.Foreground = (Brush)FindResource("TextPriBrush");
+            TrackCardBatteryPercent.Text = st.BatteryPercent >= 0 ? $"{st.BatteryPercent}%" : "";
             BatteryText.Text = st.BatteryPercent >= 0 ? $"{st.BatteryPercent}%" : "—";
         }
 
@@ -801,7 +815,17 @@ public partial class MainWindow : Window
         else if (trackChanged || artworkChanged || wasShowingTrack != ShowTrack)
         {
             UpdateTrackDisplay();
+            // Refresh the artwork without rearming the track-card deadline.
+            if (_transientKind == TransientCardKind.Track && artworkChanged)
+            {
+                FullTrackArtwork.Source = CreateTrackArtwork(info.Artwork);
+                FullTrackArtwork.Visibility = FullTrackArtwork.Source is null
+                    ? Visibility.Collapsed : Visibility.Visible;
+                FullTrackFallback.Visibility = FullTrackArtwork.Source is null
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
+        UpdateTrackCardTimeline();
 
         if (trackChanged || wasShowingTrack != ShowTrack || wasShowingCover != ShowTrackCover ||
             wasShowingEqualizer != ShowTrackEqualizer || previousHeight != CollapsedHeight)
@@ -838,7 +862,27 @@ public partial class MainWindow : Window
         TrackCoverFrame.Visibility = Visibility.Collapsed;
 
         UpdateHeadphonesIndicator();
+        TrackCardHeadphones.Visibility = _volumeMonitor.HeadphonesConnected
+            ? Visibility.Visible : Visibility.Collapsed;
+        UpdateTrackCardTimeline();
         Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+    }
+
+    private void UpdateTrackCardTimeline()
+    {
+        if (_transientKind != TransientCardKind.Track) return;
+        TimeSpan duration = _currentMedia.Duration;
+        double total = duration.TotalSeconds;
+        if (total <= 0 || double.IsNaN(total))
+        {
+            TrackCardPosition.Text = "00:00";
+            TrackCardProgressFill.Width = 0;
+            return;
+        }
+        double seconds = Math.Clamp(_currentMedia.Position.TotalSeconds, 0, total);
+        TrackCardPosition.Text = $"{(int)seconds / 60:00}:{(int)seconds % 60:00}";
+        TrackCardProgressFill.Width =
+            Math.Max(0, TrackCardProgressTrack.ActualWidth * seconds / total);
     }
 
     private void UpdateHeadphonesIndicator()
@@ -962,8 +1006,11 @@ public partial class MainWindow : Window
         switch (kind)
         {
             case TransientCardKind.Track:
-                FullTrackTitle.Text = title;
+                FullTrackTitle.Text = string.IsNullOrWhiteSpace(subtitle) ? title
+                    : $"{title} — {subtitle}";
                 FullTrackArtist.Text = subtitle;
+                TrackCardHeadphones.Visibility = _volumeMonitor.HeadphonesConnected
+                    ? Visibility.Visible : Visibility.Collapsed;
                 FullTrackAlbum.Text = details;
                 FullTrackAlbum.Visibility = string.IsNullOrWhiteSpace(details)
                     ? Visibility.Collapsed : Visibility.Visible;
@@ -1327,7 +1374,8 @@ public partial class MainWindow : Window
         {
             _hoverCollapseTimer.Stop();
             // прерывание сворачивания на середине — Expand пойдёт от текущего прогресса
-            if (!_expanded && !_gameMode && _transientKind == TransientCardKind.None &&
+            if (!_expanded && !_gameMode &&
+                _transientKind is TransientCardKind.None or TransientCardKind.Track &&
                 !_hoverExpandTimer.IsEnabled)
                 _hoverExpandTimer.Start();
         }
