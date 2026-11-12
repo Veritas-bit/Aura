@@ -40,12 +40,22 @@
                 <!-- Одинаковые отступы: 14 px от краёв тела и между всеми элементами -->
                 <StackPanel x:Name="CollapsedStack" Grid.Row="0" Orientation="Horizontal"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- Часы слева -->
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock x:Name="ClockText" Text="22:06" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="ClockSeconds" Text=":03" FontSize="11" Foreground="{DynamicResource TextSecBrush}"
-                                   VerticalAlignment="Bottom" Margin="1,0,0,2" Visibility="Collapsed"/>
-                    </StackPanel>
+                    <!-- Фиксированный блок часов: цифры не меняют ширину строки и не сдвигают соседние элементы. -->
+                    <Border x:Name="CollapsedClockBlock" Width="66" Height="28" CornerRadius="9"
+                            Background="{DynamicResource BgSurfaceBrush}" VerticalAlignment="Center"
+                            HorizontalAlignment="Center" Margin="0,0,0,0">
+                        <Grid>
+                            <TextBlock x:Name="ClockText" Text="22:06" FontFamily="Consolas"
+                                       FontSize="15" FontWeight="SemiBold" TextAlignment="Center"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Width="48" Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="ClockSeconds" Text=":03" FontFamily="Consolas"
+                                       FontSize="9" Foreground="{DynamicResource TextSecBrush}"
+                                       VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                                       Margin="0,0,2,4" Width="17" TextAlignment="Left"
+                                       Visibility="Collapsed"/>
+                        </Grid>
+                    </Border>
 
                     <Border x:Name="ClockDivider" Width="1" Height="22" Background="{DynamicResource BorderSoftBrush}"
                             Margin="14,0,12,0" VerticalAlignment="Center"/>
@@ -174,6 +184,18 @@
                         </ToggleButton>
                         </StackPanel>
                     </Grid>
+
+                    <!-- Часы в отдельной фиксированной ячейке. Появляются только после полного раскрытия ширины островка. -->
+                    <Border x:Name="ExpandedClockBlock" Width="82" Height="34" CornerRadius="10"
+                            Background="{DynamicResource BgSurfaceBrush}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Opacity="0" Visibility="Collapsed">
+                        <TextBlock x:Name="ExpandedClockText" Text="22:06:00"
+                                   FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
+                                   TextAlignment="Center" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Width="72"
+                                   Typography.NumeralAlignment="Tabular"/>
+                    </Border>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                         <Button Style="{StaticResource IconButton}" ToolTip="Настройки" Click="Settings_Click">
