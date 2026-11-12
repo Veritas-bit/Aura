@@ -63,8 +63,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        CollapsedView.MouseMove += (_, e) => CompanionEyes.TrackPointer(e.GetPosition(CollapsedView), new Size(CollapsedView.ActualWidth, CollapsedView.ActualHeight));
-        CollapsedView.MouseLeave += (_, _) => CompanionEyes.PointerLeft();
         PanelHost.RenderTransform = _panelTransition;
 
         TrackTextViewport.SizeChanged += (_, _) =>
@@ -362,6 +360,11 @@ public partial class MainWindow : Window
         ExpandedView.Width = ExpandedContentW - 8 * UiScale;
         ExpandedView.Height = expandedH - 2 * UiScale;
         ExpandedView.Opacity = SmoothStep(Math.Clamp((c - 0.82) / 0.16, 0, 1));
+        // The dedicated clock slot is revealed only when the island has reached
+        // its full horizontal expansion; its fixed width prevents nav shifting.
+        bool fullyExpandedWidth = widthProgress >= 0.995 && c >= 0.995;
+        ExpandedClockBlock.Visibility = fullyExpandedWidth ? Visibility.Visible : Visibility.Collapsed;
+        ExpandedClockBlock.Opacity = fullyExpandedWidth ? ExpandedView.Opacity : 0;
         ExpandedView.IsHitTestVisible = _expanded && ExpandedView.Opacity > 0.95;
     }
 
@@ -664,6 +667,7 @@ public partial class MainWindow : Window
         var now = DateTime.Now;
         ClockText.Text = now.ToString("HH:mm");
         ClockSeconds.Text = now.ToString(":ss");
+        ExpandedClockText.Text = now.ToString("HH:mm:ss");
 
     }
 
