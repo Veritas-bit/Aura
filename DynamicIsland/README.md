@@ -170,3 +170,20 @@ Unsupported displays do not show a brightness overlay.
   only after GetMonitorCapabilities explicitly reports brightness support.
   If the display does not support either interface, no brightness card is
   displayed. Monitor DDC/CI support and device drivers may vary.
+
+
+## Player display modes and brightness diagnostics
+
+In Settings -> Общее -> Информация о треке в островке, choose:
+- Мини-плеер — 325×24 (large card on track change for four seconds);
+- Развернутый плеер — 325×80 (persistent card while music is playing).
+
+The separate SVG-reference switch changes visual styling, not the display mode.
+The saved `ExpandedTrackIsland` setting controls the layout in normal
+(non-notification, non-volume) compact playback.
+
+Settings -> Общее -> Диагностика яркости now contains a **Проверить яркость**
+button. It reports the actual brightness and detection source where Windows
+exposes it. WMI is checked before external-monitor DDC/CI to avoid slow DDC
+queries delaying built-in laptop brightness monitoring. If no source is
+available, the app reports that limitation rather than inventing a value.

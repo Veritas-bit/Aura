@@ -18,18 +18,20 @@ public static class BrightnessMonitorService
     /// <summary>Read the monitor showing AURA, then use WMI for built-in panels.</summary>
     public static double ReadCurrentBrightness(IntPtr windowHandle)
     {
-        double ddc = ReadExternalDdc(windowHandle);
-        if (ddc >= 0)
-        {
-            LastDiagnostic = $"DDC/CI brightness: {ddc:0}%";
-            return ddc;
-        }
-
+        // Query the built-in panel first. DDC/CI calls may take seconds or
+        // stall on drivers that reject monitor-control requests.
         double wmi = ReadInternalWmi();
         if (wmi >= 0)
         {
-            LastDiagnostic = $"WMI brightness: {wmi:0}%";
+            LastDiagnostic = $"WMI: встроенный экран, {wmi:0}%";
             return wmi;
+        }
+
+        double ddc = ReadExternalDdc(windowHandle);
+        if (ddc >= 0)
+        {
+            LastDiagnostic = $"DDC/CI: внешний монитор, {ddc:0}%";
+            return ddc;
         }
         LastDiagnostic = "Brightness unavailable: target monitor does not expose DDC/CI VCP 0x10 or WMI brightness";
         return -1;

@@ -45,6 +45,9 @@ public class AppSettings
     public bool StatGpu { get; set; } = true;
     public int CollapsedTrackDisplayMode { get; set; } = 1;
     public bool ReferenceTrackCard { get; set; } = true;
+    // true: keep the SVG reference card 325x80 while a track is playing;
+    // false: 325x24 mini player with a temporary 325x80 track-change card.
+    public bool ExpandedTrackIsland { get; set; } = false;
     public bool NotificationsEnabled { get; set; } = true;
 
     // Игровой режим: в полноэкранных играх — тонкий вырез с температурами, пингом и потерями

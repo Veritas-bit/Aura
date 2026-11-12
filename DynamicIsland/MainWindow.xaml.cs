@@ -277,6 +277,7 @@ public partial class MainWindow : Window
     private bool IsNotch => _gameMode || SettingsService.Current.CollapsedStyle == "Notch";
 
     private bool ShowTrack => !_gameMode && _currentMedia.IsPlaying && _currentMedia.HasTrack;
+    private bool ShowPinnedTrackCard => ShowTrack && SettingsService.Current.ExpandedTrackIsland;
     private int TrackDisplayMode =>
         AppSettings.NormalizeTrackDisplayMode(SettingsService.Current.CollapsedTrackDisplayMode);
     // All media sessions use the single 325x24 Figma mini-player. Legacy cover/equalizer
@@ -300,6 +301,7 @@ public partial class MainWindow : Window
             TransientCardKind.Volume or TransientCardKind.Brightness => (325, 24),
             TransientCardKind.Track => (325, 80),
             TransientCardKind.Notification => (325, 80),
+            _ when ShowPinnedTrackCard => (325, 80),
             _ when ShowTrack => (325, 24),
             _ when SettingsService.Current.ShowClock && SettingsService.Current.ShowSeconds
                 => (251, 46),
@@ -477,6 +479,14 @@ public partial class MainWindow : Window
         ClockSecondsBlock.Visibility = s.ShowClock && s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
         BatteryPanel.Visibility = s.ShowBattery && _monitor.Stats.HasBattery ? Visibility.Visible : Visibility.Collapsed;
         s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
+        // If the user selected a permanent card while its preview was showing,
+        // clear the temporary timer without breaking playback.
+        if (s.ExpandedTrackIsland && _transientKind == TransientCardKind.Track)
+        {
+            _transientTimer.Stop();
+            _transientDeadline = DateTimeOffset.MinValue;
+            _transientKind = TransientCardKind.None;
+        }
         UpdateTrackDisplay();
         UpdateCollapsedWeather();
         UpdateAudioAnalysis();
@@ -815,26 +825,18 @@ public partial class MainWindow : Window
         bool wasShowingEqualizer = ShowTrackEqualizer;
         double previousHeight = CollapsedHeight;
         _currentMedia = info;
-        if (trackChanged && info.HasTrack && !_expanded)
+        if (trackChanged && info.HasTrack && !_expanded && !ShowPinnedTrackCard)
         {
+            // Mini mode: preview the full card for four seconds only.
             ShowTransientCard(TransientCardKind.Track, info.Title, info.Artist,
                 info.AlbumTitle, info.Artwork, TimeSpan.FromSeconds(4));
         }
         else if (trackChanged || artworkChanged || wasShowingTrack != ShowTrack)
         {
             UpdateTrackDisplay();
-            // Refresh the artwork without rearming the track-card deadline.
-            if (_transientKind == TransientCardKind.Track && artworkChanged)
-            {
-                FullTrackArtwork.Source = CreateTrackArtwork(info.Artwork);
-                FullTrackArtwork.Visibility = FullTrackArtwork.Source is null
-                    ? Visibility.Collapsed : Visibility.Visible;
-                FullTrackFallback.Visibility = FullTrackArtwork.Source is null
-                    ? Visibility.Visible : Visibility.Collapsed;
-                ClassicTrackArtwork.Source = FullTrackArtwork.Source;
-                ClassicTrackArtwork.Visibility = FullTrackArtwork.Visibility;
-                ClassicTrackFallback.Visibility = FullTrackFallback.Visibility;
-            }
+            // A metadata update must not extend the temporary card's deadline.
+            if (_transientKind == TransientCardKind.Track || ShowPinnedTrackCard)
+                UpdateFullTrackCard(info);
         }
         UpdateTrackCardTimeline();
 
@@ -847,7 +849,7 @@ public partial class MainWindow : Window
     private void UpdateTrackDisplay()
     {
         bool transient = _transientKind != TransientCardKind.None;
-        bool mini = !transient && ShowTrack;
+        bool mini = !transient && ShowTrack && !ShowPinnedTrackCard;
         bool basic = !transient && !ShowTrack;
 
         CollapsedStack.Visibility = basic ? Visibility.Visible : Visibility.Collapsed;
@@ -856,7 +858,10 @@ public partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         BrightnessIslandView.Visibility = _transientKind == TransientCardKind.Brightness
             ? Visibility.Visible : Visibility.Collapsed;
-        bool trackCard = _transientKind == TransientCardKind.Track;
+        bool trackCard = _transientKind == TransientCardKind.Track ||
+            (!transient && ShowPinnedTrackCard);
+        if (trackCard)
+            UpdateFullTrackCard(_currentMedia);
         FullTrackCardView.Visibility = trackCard && SettingsService.Current.ReferenceTrackCard
             ? Visibility.Visible : Visibility.Collapsed;
         ClassicTrackCardView.Visibility = trackCard && !SettingsService.Current.ReferenceTrackCard
@@ -884,7 +889,7 @@ public partial class MainWindow : Window
 
     private void UpdateTrackCardTimeline()
     {
-        if (_transientKind != TransientCardKind.Track) return;
+        if (_transientKind != TransientCardKind.Track && !ShowPinnedTrackCard) return;
         TimeSpan duration = _currentMedia.Duration;
         double total = duration.TotalSeconds;
         if (total <= 0 || double.IsNaN(total))
@@ -1027,6 +1032,42 @@ public partial class MainWindow : Window
             "", "", null, TimeSpan.FromSeconds(2), muted ? 0 : volume);
     }
 
+    private string _fullTrackCardId = "";
+    private byte[]? _fullTrackCardArtwork;
+
+    // Used by both permanent 325x80 mode and the four-second preview.
+    private void UpdateFullTrackCard(MediaSessionInfo info)
+    {
+        FullTrackTitle.Text = string.IsNullOrWhiteSpace(info.Artist)
+            ? info.Title : $"{info.Title} — {info.Artist}";
+        FullTrackArtist.Text = info.Artist;
+        FullTrackAlbum.Text = info.AlbumTitle;
+        FullTrackAlbum.Visibility = string.IsNullOrWhiteSpace(info.AlbumTitle)
+            ? Visibility.Collapsed : Visibility.Visible;
+        ClassicTrackTitle.Text = info.Title;
+        ClassicTrackArtist.Text = info.Artist;
+        ClassicTrackAlbum.Text = info.AlbumTitle;
+        ClassicTrackAlbum.Visibility = string.IsNullOrWhiteSpace(info.AlbumTitle)
+            ? Visibility.Collapsed : Visibility.Visible;
+        TrackCardHeadphones.Visibility = _volumeMonitor.HeadphonesConnected
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!string.Equals(_fullTrackCardId, info.TrackId, StringComparison.Ordinal) ||
+            !ReferenceEquals(_fullTrackCardArtwork, info.Artwork))
+        {
+            var bitmap = CreateTrackArtwork(info.Artwork);
+            FullTrackArtwork.Source = bitmap;
+            ClassicTrackArtwork.Source = bitmap;
+            FullTrackArtwork.Visibility = bitmap is null ? Visibility.Collapsed : Visibility.Visible;
+            ClassicTrackArtwork.Visibility = FullTrackArtwork.Visibility;
+            FullTrackFallback.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
+            ClassicTrackFallback.Visibility = FullTrackFallback.Visibility;
+            _fullTrackCardId = info.TrackId;
+            _fullTrackCardArtwork = info.Artwork;
+        }
+        UpdateTrackCardTimeline();
+    }
+
     private void ShowTransientCard(TransientCardKind kind, string title, string subtitle,
         string details, byte[]? artwork, TimeSpan duration, double? progress = null)
     {
@@ -1042,29 +1083,7 @@ public partial class MainWindow : Window
         switch (kind)
         {
             case TransientCardKind.Track:
-                FullTrackTitle.Text = string.IsNullOrWhiteSpace(subtitle) ? title
-                    : $"{title} — {subtitle}";
-                FullTrackArtist.Text = subtitle;
-                ClassicTrackTitle.Text = title;
-                ClassicTrackArtist.Text = subtitle;
-                ClassicTrackAlbum.Text = details;
-                ClassicTrackAlbum.Visibility = string.IsNullOrWhiteSpace(details)
-                    ? Visibility.Collapsed : Visibility.Visible;
-                ClassicTrackArtwork.Source = CreateTrackArtwork(artwork);
-                ClassicTrackArtwork.Visibility = ClassicTrackArtwork.Source is null
-                    ? Visibility.Collapsed : Visibility.Visible;
-                ClassicTrackFallback.Visibility = ClassicTrackArtwork.Source is null
-                    ? Visibility.Visible : Visibility.Collapsed;
-                TrackCardHeadphones.Visibility = _volumeMonitor.HeadphonesConnected
-                    ? Visibility.Visible : Visibility.Collapsed;
-                FullTrackAlbum.Text = details;
-                FullTrackAlbum.Visibility = string.IsNullOrWhiteSpace(details)
-                    ? Visibility.Collapsed : Visibility.Visible;
-                FullTrackArtwork.Source = CreateTrackArtwork(artwork);
-                FullTrackArtwork.Visibility = FullTrackArtwork.Source is null
-                    ? Visibility.Collapsed : Visibility.Visible;
-                FullTrackFallback.Visibility = FullTrackArtwork.Source is null
-                    ? Visibility.Visible : Visibility.Collapsed;
+                UpdateFullTrackCard(_currentMedia);
                 break;
             case TransientCardKind.Notification:
                 NotificationAppName.Text = title;

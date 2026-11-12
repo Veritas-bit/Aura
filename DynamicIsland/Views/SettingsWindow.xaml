@@ -187,14 +187,44 @@
                                 </StackPanel>
                             </Border>
 
+                            <TextBlock Text="Диагностика яркости" FontSize="14"
+                                       FontWeight="SemiBold" Margin="2,12,0,6"/>
+                            <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
+                                    BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="AURA показывает изменение яркости только если Windows или монитор сообщают её фактический уровень."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="BrightnessDiagnosisText"
+                                               Text="Нажмите «Проверить», чтобы определить поддержку яркости."
+                                               FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextPriBrush}" Margin="0,0,0,10"/>
+                                    <Button x:Name="BrightnessCheckButton" Content="Проверить яркость"
+                                            Width="170" HorizontalAlignment="Left"
+                                            Padding="12,7" Click="BrightnessCheck_Click"/>
+                                </StackPanel>
+                            </Border>
+
                             <TextBlock Text="Информация о треке в островке" FontSize="14"
                                        FontWeight="SemiBold" Margin="2,12,0,6"/>
                             <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
                                     BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
                                 <StackPanel>
-                                    <TextBlock Text="Мини-плеер — 325×24. При смене трека показывается карточка 325×80, затем плеер снова становится компактным."
-                                               FontSize="12" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Размер островка при воспроизведении" FontWeight="SemiBold"
+                                               FontSize="13" Margin="0,0,0,8"/>
+                                    <RadioButton x:Name="RbMiniTrackIsland" GroupName="IslandPlayerSize"
+                                                 Content="Мини-плеер — 325×24"
+                                                 Checked="TrackIslandSize_Changed" Margin="0,0,0,7"
+                                                 Foreground="{DynamicResource TextPriBrush}"/>
+                                    <RadioButton x:Name="RbExpandedTrackIsland" GroupName="IslandPlayerSize"
+                                                 Content="Развернутый плеер — 325×80 (по референсу)"
+                                                 Checked="TrackIslandSize_Changed" Margin="0,0,0,7"
+                                                 Foreground="{DynamicResource TextPriBrush}"/>
+                                    <TextBlock Text="В мини-режиме большая карточка показывается 4 секунды при смене трека. В развернутом — остаётся открытой, пока музыка играет."
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,1,0,11"/>
+                                    <TextBlock Text="Оформление большой карточки" FontSize="12"
+                                               FontWeight="SemiBold" Margin="0,0,0,6"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,3,0,10">
                                         <ToggleButton x:Name="SwReferenceTrackCard"
                                                       Style="{StaticResource Switch}"

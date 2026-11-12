@@ -177,6 +177,8 @@ public partial class SettingsWindow : Window
         s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
         TrackDisplayModeBox.SelectedIndex = s.CollapsedTrackDisplayMode - 1;
         SwReferenceTrackCard.IsChecked = s.ReferenceTrackCard;
+        RbMiniTrackIsland.IsChecked = !s.ExpandedTrackIsland;
+        RbExpandedTrackIsland.IsChecked = s.ExpandedTrackIsland;
         SwBattery.IsChecked = s.ShowBattery;
         SwStats.IsChecked = s.ShowStats;
         SwCpu.IsChecked = s.StatCpu;
@@ -307,6 +309,40 @@ public partial class SettingsWindow : Window
         st.StatRam = SwRam.IsChecked == true;
         st.StatGpu = SwGpu.IsChecked == true;
         SettingsService.NotifyChanged();
+    }
+
+    private void TrackIslandSize_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        SettingsService.Current.ExpandedTrackIsland = RbExpandedTrackIsland.IsChecked == true;
+        SettingsService.NotifyChanged();
+    }
+
+    private async void BrightnessCheck_Click(object sender, RoutedEventArgs e)
+    {
+        BrightnessCheckButton.IsEnabled = false;
+        BrightnessDiagnosisText.Text = "Проверяем подключённый экран…";
+        try
+        {
+            IntPtr handle = Owner is MainWindow main
+                ? new System.Windows.Interop.WindowInteropHelper(main).Handle
+                : IntPtr.Zero;
+            double level = await Task.Run(() =>
+                BrightnessMonitorService.ReadCurrentBrightness(handle));
+            string source = BrightnessMonitorService.LastDiagnostic;
+            BrightnessDiagnosisText.Text = level >= 0
+                ? $"Яркость доступна: {level:0}% — {source}. При следующем изменении AURA покажет полосу 325×24."
+                : "Не удалось считать яркость. " + source +
+                  ". Проверьте DDC/CI в меню внешнего монитора. Изменение программной гаммы Windows может не предоставлять уровень яркости.";
+        }
+        catch (Exception ex)
+        {
+            BrightnessDiagnosisText.Text = "Ошибка диагностики: " + ex.Message;
+        }
+        finally
+        {
+            BrightnessCheckButton.IsEnabled = true;
+        }
     }
 
     private void TrackDisplayMode_Changed(object sender, SelectionChangedEventArgs e)
