@@ -32,7 +32,8 @@ Run `build-msix.bat` from the repository root. The script:
 2. Publishes the WPF app as a self-contained Windows x64 folder.
 3. Packages and signs the output as MSIX using `Package.appxmanifest`.
 
-Install the development certificate once on the target PC:
+On the build PC, install the development certificate once from an elevated
+PowerShell terminal:
 
 ```powershell
 winapp cert install .\devcert.pfx
@@ -42,9 +43,17 @@ Then install the generated `.msix` package. Windows will register AURA with
 package identity and the declared User Notification Listener capability,
 which is required for the app's explicit notification-access request.
 
-The self-signed certificate is for local testing only. For public distribution,
-sign the package with a trusted code-signing certificate. Keep `devcert.pfx`
-private and do not commit it.
+For another test PC, transfer only the generated public `.cer` file and import
+it into the Local Machine Trusted People store from an elevated PowerShell
+terminal:
+
+```powershell
+Import-Certificate -FilePath .\devcert.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+```
+
+Never distribute `devcert.pfx`: it contains the private signing key. The
+self-signed certificate is for local testing only. For public distribution,
+sign the package with a trusted code-signing certificate.
 
 The ordinary portable EXE build remains available and does not gain package
 identity; Windows notification-listener access is available only in the
