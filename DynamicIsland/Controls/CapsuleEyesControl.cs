@@ -25,6 +25,10 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
     private DateTime _blinkStarted;
     private bool _isBlinking;
     private bool _disposed;
+    private double _gazeX;
+    private double _gazeY;
+    private double _targetGazeX;
+    private double _targetGazeY;
 
     public Brush AccentBrush
     {
@@ -75,9 +79,25 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
         }
     }
 
+    /// <summary>Receives pointer coordinates relative to this control from its parent island.</summary>
+    public void TrackPointer(Point point)
+    {
+        _targetGazeX = Math.Clamp((point.X / Math.Max(1, ActualWidth) - 0.5) * 2, -1, 1);
+        _targetGazeY = Math.Clamp((point.Y / Math.Max(1, ActualHeight) - 0.5) * 2, -1, 1);
+    }
+
+    public void PointerLeft()
+    {
+        _targetGazeX = 0;
+        _targetGazeY = 0;
+    }
+
     private void OnAnimationTick(object? sender, EventArgs e)
     {
         if (_disposed || !IsVisible) return;
+
+        _gazeX += (_targetGazeX - _gazeX) * 0.16;
+        _gazeY += (_targetGazeY - _gazeY) * 0.16;
 
         var now = DateTime.Now;
         if (_isBlinking)
@@ -122,7 +142,8 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
 
         double totalWidth = eyeWidth * 2 + gap;
         double left = (width - totalWidth) / 2;
-        double top = (height - eyeHeight) / 2;
+        double top = (height - eyeHeight) / 2 + _gazeY * 0.7;
+        left += _gazeX * 1.5;
         var brush = AccentBrush ?? Brushes.MediumPurple;
 
         DrawCapsule(drawingContext, brush, left, top, eyeWidth, eyeHeight);
@@ -132,9 +153,9 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
     private static void DrawCapsule(DrawingContext dc, Brush brush,
         double x, double y, double width, double height)
     {
-        double radius = width / 2;
+        double radius = Math.Min(width, height) / 2;
         dc.DrawRoundedRectangle(brush, null,
-            new Rect(x, y, width, Math.Max(width, height)),
+            new Rect(x, y, width, Math.Max(1, height)),
             radius, radius);
     }
 
