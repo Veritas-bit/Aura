@@ -187,3 +187,16 @@ button. It reports the actual brightness and detection source where Windows
 exposes it. WMI is checked before external-monitor DDC/CI to avoid slow DDC
 queries delaying built-in laptop brightness monitoring. If no source is
 available, the app reports that limitation rather than inventing a value.
+
+## Unified track card and Windows brightness event fallback
+
+The same `FullTrackCardView` is used for the automatic four-second track-change
+preview and the pinned 325×80 playback Island. The duplicate classic card and
+its extra style switch were removed; the size switch remains.
+
+For display brightness, AURA also registers a Windows power-setting listener
+for `GUID_VIDEO_CURRENT_MONITOR_BRIGHTNESS` and reads the real level from
+`WM_POWERBROADCAST/PBT_POWERSETTINGCHANGE`. WMI/DDC/CI remain as fallbacks.
+The settings diagnostic displays registration state and the most recent event
+level. A system can support brightness keys without publishing this event;
+AURA never guesses a brightness percentage.

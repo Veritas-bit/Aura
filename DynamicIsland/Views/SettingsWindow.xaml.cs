@@ -319,7 +319,7 @@ public partial class SettingsWindow : Window
     private async void BrightnessCheck_Click(object sender, RoutedEventArgs e)
     {
         BrightnessCheckButton.IsEnabled = false;
-        BrightnessDiagnosisText.Text = "Проверяем подключённый экран…";
+        BrightnessDiagnosisText.Text = "Проверяем Windows, WMI и DDC/CI…";
         try
         {
             IntPtr handle = Owner is MainWindow main
@@ -327,15 +327,26 @@ public partial class SettingsWindow : Window
                 : IntPtr.Zero;
             double level = await Task.Run(() =>
                 BrightnessMonitorService.ReadCurrentBrightness(handle));
-            string source = BrightnessMonitorService.LastDiagnostic;
-            BrightnessDiagnosisText.Text = level >= 0
-                ? $"Яркость доступна: {level:0}% — {source}. При следующем изменении AURA покажет полосу 325×24."
-                : "Не удалось считать яркость. " + source +
-                  ". Проверьте DDC/CI в меню внешнего монитора. Изменение программной гаммы Windows может не предоставлять уровень яркости.";
+            double? powerValue = BrightnessPowerEventService.LastObservedPercent;
+            string registration = BrightnessPowerEventService.RegistrationStatus;
+            if (level >= 0)
+                BrightnessDiagnosisText.Text =
+                    $"Яркость: {level:0}% — {BrightnessMonitorService.LastDiagnostic}. " +
+                    $"События Windows: {registration}.";
+            else if (powerValue.HasValue)
+                BrightnessDiagnosisText.Text =
+                    $"Windows сообщила яркость {powerValue.Value:0}% через событие питания. " +
+                    $"События Windows: {registration}. WMI/DDC/CI на этом экране недоступны.";
+            else
+                BrightnessDiagnosisText.Text =
+                    "Не удалось получить яркость через WMI/DDC/CI. " +
+                    $"События Windows: {registration}. " +
+                    "Измените яркость клавишами или системной панелью и снова нажмите «Проверить». " +
+                    "AURA не подставляет выдуманные проценты.";
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            BrightnessDiagnosisText.Text = "Ошибка диагностики: " + ex.Message;
+            BrightnessDiagnosisText.Text = "Ошибка диагностики: " + exception.Message;
         }
         finally
         {

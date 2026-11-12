@@ -42,6 +42,8 @@ public partial class MainWindow : Window
     private double _displayVolumePercent;
     private double _displayBrightnessPercent;
     private readonly MediaSessionService _media = new();
+    private readonly BrightnessPowerEventService _brightnessPower = new();
+    private DateTimeOffset _brightnessPowerRegisteredAt;
     private readonly AudioVolumeMonitorService _volumeMonitor = new();
     private readonly NotificationListenerService _notificationListener = new();
     private readonly AudioSpectrumService _audioSpectrum = new();
@@ -125,7 +127,7 @@ public partial class MainWindow : Window
         _volumePollTimer.Start();
         // WMI brightness is probed off the UI thread; unsupported external monitors
         // never trigger a brightness transient.
-        _brightnessPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+        _brightnessPollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _brightnessPollTimer.Tick += async (_, _) => await PollBrightnessAsync();
         _brightnessPollTimer.Start();
         _notificationListener.NotificationReceived += OnDesktopNotificationReceived;
@@ -210,6 +212,9 @@ public partial class MainWindow : Window
                 _hookAdded = true;
             }
             RegisterGlobalHotkey();
+            _brightnessPower.BrightnessChanged += OnWindowsBrightnessChanged;
+            _brightnessPowerRegisteredAt = DateTimeOffset.UtcNow;
+            _brightnessPower.Register(_hwnd);
 
             // Иконка в трее: тема, статус-бар, выход
             _tray = new TrayService(_hwnd);
@@ -231,6 +236,8 @@ public partial class MainWindow : Window
             _compactMorphTimer.Stop();
             _volumePollTimer.Stop();
             _brightnessPollTimer.Stop();
+            _brightnessPower.BrightnessChanged -= OnWindowsBrightnessChanged;
+            _brightnessPower.Dispose();
             if (_volumeEventsAttached)
             {
                 _volumeMonitor.VolumeChanged -= OnSystemVolumeChanged;
@@ -926,6 +933,25 @@ public partial class MainWindow : Window
             BrightnessBarTrack.ActualWidth * Math.Clamp(_displayBrightnessPercent, 0, 100) / 100);
     }
 
+    private void OnWindowsBrightnessChanged(double brightness)
+    {
+        // Windows supplies the actual brightness percent with this event,
+        // even if WMI/DDC/CI cannot enumerate the current monitor.
+        bool first = _lastBrightness < 0;
+        double old = _lastBrightness;
+        _lastBrightness = brightness;
+        _brightnessDiagnosis = $"Windows event: {brightness:0}%";
+        if (!IsLoaded || _gameMode || _expanded) return;
+
+        // Ignore only the system's immediate baseline notification at startup.
+        if (first && DateTimeOffset.UtcNow - _brightnessPowerRegisteredAt <
+            TimeSpan.FromSeconds(1.5)) return;
+        if (!first && Math.Abs(old - brightness) < 0.5) return;
+
+        ShowTransientCard(TransientCardKind.Brightness, "", "", "", null,
+            TimeSpan.FromSeconds(2), brightness);
+    }
+
     private async Task PollBrightnessAsync()
     {
         if (_brightnessPolling) return;
@@ -1556,6 +1582,7 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        _brightnessPower.HandleMessage(msg, wParam, lParam);
         if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
         {
             if (_expanded) Collapse(); else if (!_gameMode) Expand();
