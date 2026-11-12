@@ -28,11 +28,15 @@ dotnet publish "DynamicIsland\DynamicIsland.csproj" -c Release -r win-x64 --self
   -o "publish-msix"
 if errorlevel 1 goto :err
 
-echo [3/4] Creating signed MSIX package...
+echo [3/4] Copying MSIX logo assets into publish output...
+if not exist "publish-msix\\Assets" mkdir "publish-msix\\Assets"
+xcopy "Assets" "publish-msix\\Assets\\" /E /I /Q /Y >nul
+if errorlevel 1 goto :err
+echo [4/4] Creating signed MSIX package...
 winapp pack "publish-msix" --manifest "Package.appxmanifest" --cert "devcert.pfx"
 if errorlevel 1 goto :err
 
-echo [4/4] Package created. Install dev certificate once with:
+echo Package created. Install dev certificate once with:
 echo   winapp cert install devcert.pfx
 echo Then install the generated .msix package.
 popd

@@ -9,7 +9,7 @@
     <AssemblyName>AURA</AssemblyName>
     <RootNamespace>DynamicIsland</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.0.2</Version>
+    <Version>0.0.3</Version>
     <Product>AURA — лаунчер для Windows</Product>
     <Description>Элегантная панель инструментов в стиле Dynamic Island для Windows</Description>
   </PropertyGroup>

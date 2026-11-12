@@ -1,0 +1,52 @@
+name: Verify AURA Windows build
+
+on:
+  push:
+    branches:
+      - feature/companion-capsule-eyes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout requested feature branch
+        uses: actions/checkout@v4
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore runtime-specific dependencies
+        run: dotnet restore DynamicIsland/DynamicIsland.csproj -r win-x64
+
+      - name: Compile WPF project
+        run: dotnet build DynamicIsland/DynamicIsland.csproj -c Release -r win-x64 --no-restore
+
+      - name: Publish self-contained Windows x64
+        run: dotnet publish DynamicIsland/DynamicIsland.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -o out/win-x64
+
+      - name: Verify published executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "out/win-x64/AURA.exe")) { throw "Publish did not generate AURA.exe" }
+
+      - name: Install WinApp CLI
+        uses: microsoft/setup-WinAppCli@v0.1
+
+      - name: Verify unsigned MSIX packaging
+        shell: pwsh
+        run: |
+          Copy-Item -Path "Assets" -Destination "out/win-x64/Assets" -Recurse -Force
+          winapp pack "out/win-x64" --manifest "Package.appxmanifest" --no-sign
+
+      - name: Upload checked Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURA-win-x64-${{ github.sha }}
+          path: out/win-x64/
+          if-no-files-found: error

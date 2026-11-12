@@ -19,6 +19,16 @@ high-contrast text, and three configurable accent colors.
 dotnet run --project DynamicIsland/DynamicIsland.csproj -c Release
 ```
 
+## Always run the updated feature build
+
+From the repository root, run `rebuild-feature.bat`. It fetches and checks out
+`feature/companion-capsule-eyes`, fast-forwards without discarding local edits,
+closes the old AURA process, publishes the new binary, and launches it. This
+prevents accidentally running the old `main` build or an old `publish/AURA.exe`.
+
+The feature branch also runs a Windows CI build and verifies an unsigned MSIX
+package. CI artifacts are unsigned build outputs, not production installers.
+
 ## Build a portable EXE
 
 Run `DynamicIsland/build.bat`. The self-contained Windows x64 executable is
@@ -30,7 +40,8 @@ Run `build-msix.bat` from the repository root. The script:
 
 1. Creates a local development certificate when one does not exist.
 2. Publishes the WPF app as a self-contained Windows x64 folder.
-3. Packages and signs the output as MSIX using `Package.appxmanifest`.
+3. Copies MSIX logo assets into the published folder.
+4. Packages and signs the output as MSIX using `Package.appxmanifest`.
 
 On the build PC, install the development certificate once from an elevated
 PowerShell terminal:
