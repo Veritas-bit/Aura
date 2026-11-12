@@ -63,6 +63,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        CollapsedView.MouseMove += (_, e) => CompanionEyes.TrackPointer(e.GetPosition(CompanionEyes));
+        CollapsedView.MouseLeave += (_, _) => CompanionEyes.PointerLeft();
         PanelHost.RenderTransform = _panelTransition;
 
         TrackTextViewport.SizeChanged += (_, _) =>
