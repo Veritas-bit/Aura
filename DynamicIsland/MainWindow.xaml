@@ -80,19 +80,23 @@
 
                     <StackPanel x:Name="StatsPanel" Grid.Column="5" Orientation="Horizontal"
                                 HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <StackPanel x:Name="BatteryPanel" Orientation="Horizontal"
-                                    Width="50" VerticalAlignment="Center">
-                            <Path x:Name="BatteryIcon" Style="{StaticResource VecIcon}"
+                        <Grid x:Name="BatteryPanel" Width="50" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="20"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Path x:Name="BatteryIcon" Grid.Column="0"
+                                  Style="{StaticResource VecIcon}"
                                   Width="20" Height="20"
                                   Data="{StaticResource ic_battery_full}"
                                   Fill="{DynamicResource TextSecBrush}"
                                   VerticalAlignment="Center"/>
-                            <TextBlock x:Name="BatteryText" Text="100%"
+                            <TextBlock x:Name="BatteryText" Grid.Column="1" Text="100%"
                                        FontFamily="Inter, Segoe UI" FontSize="8"
-                                       FontWeight="SemiBold" Margin="3,0,0,0"
-                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextSecBrush}"/>
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
                     <!-- Optional weather is reserved for the existing alternate game mode. -->
                     <StackPanel x:Name="CollapsedWeatherPanel" Grid.Column="5"
