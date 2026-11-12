@@ -16,7 +16,7 @@ if errorlevel 1 (
 
 if not exist "devcert.pfx" (
   echo [1/4] Creating a local development signing certificate...
-  winapp cert generate --if-exists skip
+  winapp cert generate --manifest "Package.appxmanifest" --if-exists skip
   if errorlevel 1 goto :err
 ) else (
   echo [1/4] Using existing local development certificate.
