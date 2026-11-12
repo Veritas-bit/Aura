@@ -138,3 +138,19 @@ The headphone icon is shown only when the active Windows playback endpoint is
 identified as headphones/headset by its Core Audio form factor or device name.
 An unsupported driver or ambiguous device name may be classified conservatively;
 AURA does not claim that every paired Bluetooth device is an active headphone.
+
+## Compact visual refinements
+
+The base 215x46 DIP island has no vertical divider. Its normal visual layout uses
+20 DIP left/right inset and 20 DIP gaps between clock, companion, and battery.
+Clock text is 15 DIP Inter SemiBold; unboxed top-aligned seconds and battery
+percentage are 8 DIP. The eyes are two 14x24 DIP capsules with 12 DIP separation
+and 7 DIP corner radius. Inter is selected when installed on Windows, otherwise
+the UI falls back to Segoe UI without bundling a font.
+
+The 325x24 DIP volume and brightness overlays have no interactive slider. Each
+uses a 12 DIP icon, a 4 DIP horizontal fill bar, and a percentage. Windows Core
+Audio events update the volume line in place; repeated volume keystrokes must
+not restart the transient opacity or Body-size animations. A brightness bar
+appears for supported built-in screens when Windows WMI reports a change.
+Unsupported displays do not show a brightness overlay.

@@ -39,8 +39,8 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
 
     public CapsuleEyesControl()
     {
-        Width = 30;
-        Height = 22;
+        Width = 46; // 40 DIP eyes + 3 DIP movement space on each side
+        Height = 32; // 24 DIP eyes + 4 DIP movement space vertically
         IsHitTestVisible = false;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
@@ -147,9 +147,9 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
         double height = ActualHeight;
         if (width <= 0 || height <= 0) return;
 
-        double eyeWidth = Math.Min(width * 0.22, 7.5);
-        double eyeHeight = height * 0.72;
-        double gap = width * 0.13;
+        const double eyeWidth = 14;
+        double eyeHeight = 24;
+        const double gap = 12;
 
         // A small, smooth squeeze creates a natural blink without changing the capsule silhouette.
         if (_isBlinking)
@@ -164,8 +164,8 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
 
         double totalWidth = eyeWidth * 2 + gap;
         double left = (width - totalWidth) / 2;
-        double top = (height - eyeHeight) / 2 + _gazeY * 2.6;
-        left += _gazeX * 4.5;
+        double top = (height - eyeHeight) / 2 + _gazeY * 3;
+        left += _gazeX * 3;
         var brush = AccentBrush ?? Brushes.MediumPurple;
 
         DrawCapsule(drawingContext, brush, left, top, eyeWidth, eyeHeight);
@@ -175,7 +175,7 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
     private static void DrawCapsule(DrawingContext dc, Brush brush,
         double x, double y, double width, double height)
     {
-        double radius = Math.Min(width, height) / 2;
+        double radius = Math.Min(7, Math.Min(width, height) / 2);
         dc.DrawRoundedRectangle(brush, null,
             new Rect(x, y, width, Math.Max(1, height)),
             radius, radius);

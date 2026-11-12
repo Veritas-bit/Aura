@@ -30,6 +30,12 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _marqueeTimer;
     private readonly DispatcherTimer _transientTimer;
     private readonly DispatcherTimer _volumePollTimer;
+    private readonly DispatcherTimer _brightnessPollTimer;
+    private bool _brightnessPolling;
+    private bool? _brightnessSupported;
+    private double _lastBrightness = -1;
+    private double _displayVolumePercent;
+    private double _displayBrightnessPercent;
     private readonly MediaSessionService _media = new();
     private readonly AudioVolumeMonitorService _volumeMonitor = new();
     private readonly NotificationListenerService _notificationListener = new();
@@ -49,7 +55,7 @@ public partial class MainWindow : Window
     private string _displayedTrackId = "";
     private byte[]? _displayedArtwork;
     private TrayService? _tray;
-    private enum TransientCardKind { None, Track, Volume, Notification }
+    private enum TransientCardKind { None, Track, Volume, Brightness, Notification }
     private TransientCardKind _transientKind;
     private bool _volumeEventsAttached;
 
@@ -74,6 +80,8 @@ public partial class MainWindow : Window
 
         TrackTextViewport.SizeChanged += (_, _) =>
             Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+        VolumeBarTrack.SizeChanged += (_, _) => UpdateVolumeBar();
+        BrightnessBarTrack.SizeChanged += (_, _) => UpdateBrightnessBar();
         Width = WindowW();
         Height = WindowH();
         BuildStatsStrip();
@@ -96,6 +104,11 @@ public partial class MainWindow : Window
         _volumePollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _volumePollTimer.Tick += (_, _) => _volumeMonitor.RefreshDefaultDevice();
         _volumePollTimer.Start();
+        // WMI brightness is probed off the UI thread; unsupported external monitors
+        // never trigger a brightness transient.
+        _brightnessPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
+        _brightnessPollTimer.Tick += async (_, _) => await PollBrightnessAsync();
+        _brightnessPollTimer.Start();
         _notificationListener.NotificationReceived += OnDesktopNotificationReceived;
 
         // Исходная форма тела и позиция окна до первого кадра
@@ -187,6 +200,7 @@ public partial class MainWindow : Window
             _marqueeTimer.Stop();
             _transientTimer.Stop();
             _volumePollTimer.Stop();
+            _brightnessPollTimer.Stop();
             if (_volumeEventsAttached)
             {
                 _volumeMonitor.VolumeChanged -= OnSystemVolumeChanged;
@@ -253,7 +267,7 @@ public partial class MainWindow : Window
         if (_gameMode) return (CollapsedBaseW + 3 * StatItemW, GameH * UiScale);
         return _transientKind switch
         {
-            TransientCardKind.Volume => (325, 24),
+            TransientCardKind.Volume or TransientCardKind.Brightness => (325, 24),
             TransientCardKind.Track => (325, 80),
             TransientCardKind.Notification => (325, 80),
             _ when ShowTrack => (325, 24),
@@ -430,7 +444,6 @@ public partial class MainWindow : Window
         CollapsedClockBlock.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         ClockText.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         ClockSecondsBlock.Visibility = s.ShowClock && s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
-        ClockDivider.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         BatteryPanel.Visibility = s.ShowBattery && _monitor.Stats.HasBattery ? Visibility.Visible : Visibility.Collapsed;
         s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
         UpdateTrackDisplay();
@@ -480,7 +493,7 @@ public partial class MainWindow : Window
         var easing = new CubicBezierEase { X1 = 0.2, Y1 = 0.7, X2 = 0.2, Y2 = 1 };
         if (Math.Abs(currentW - target.Width) > 0.25)
             BeginAnimation(CollapsedWidthProperty, new DoubleAnimation(
-                currentW, target.Width, TimeSpan.FromMilliseconds(280))
+                currentW, target.Width, TimeSpan.FromMilliseconds(225))
             { EasingFunction = easing, FillBehavior = FillBehavior.HoldEnd });
         else
         {
@@ -490,7 +503,7 @@ public partial class MainWindow : Window
 
         if (Math.Abs(currentH - target.Height) > 0.25)
             BeginAnimation(CompactHeightProperty, new DoubleAnimation(
-                currentH, target.Height, TimeSpan.FromMilliseconds(280))
+                currentH, target.Height, TimeSpan.FromMilliseconds(225))
             { EasingFunction = easing, FillBehavior = FillBehavior.HoldEnd });
         else
         {
@@ -637,8 +650,9 @@ public partial class MainWindow : Window
             gpuItem.Root.Visibility = gpuVisible ? Visibility.Visible : Visibility.Collapsed;
         UpdateStatsPanelVisibility();
 
-        // ширина тела могла измениться (появление/пропадание GPU, включение статистики)
-        UpdateCollapsedWidth(animate: !_expanded && !_animating);
+        // The fixed-size compact layouts do not depend on periodic CPU/GPU polls.
+        if (_gameMode)
+            UpdateCollapsedWidth(animate: !_expanded && !_animating);
     }
 
     private void UpdateStat(string key, double pct)
@@ -752,6 +766,8 @@ public partial class MainWindow : Window
         CollapsedTrackView.Visibility = mini ? Visibility.Visible : Visibility.Collapsed;
         VolumeIslandView.Visibility = _transientKind == TransientCardKind.Volume
             ? Visibility.Visible : Visibility.Collapsed;
+        BrightnessIslandView.Visibility = _transientKind == TransientCardKind.Brightness
+            ? Visibility.Visible : Visibility.Collapsed;
         FullTrackCardView.Visibility = _transientKind == TransientCardKind.Track
             ? Visibility.Visible : Visibility.Collapsed;
         NotificationIslandView.Visibility = _transientKind == TransientCardKind.Notification
@@ -784,14 +800,54 @@ public partial class MainWindow : Window
         HeadphoneVolumeHigh.Opacity = volume >= 67 ? 1 : 0.2;
     }
 
-    private bool _updatingVolumeSlider;
-    private void IslandVolumeSlider_ValueChanged(
-        object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void UpdateVolumeBar()
     {
-        if (_updatingVolumeSlider || !IsLoaded || _transientKind != TransientCardKind.Volume)
-            return;
-        _volumeMonitor.SetVolumePercent(e.NewValue);
-        VolumeLevelText.Text = $"{Math.Round(e.NewValue):0}%";
+        VolumeBarFill.Width = Math.Max(0,
+            VolumeBarTrack.ActualWidth * Math.Clamp(_displayVolumePercent, 0, 100) / 100);
+    }
+
+    private void UpdateBrightnessBar()
+    {
+        BrightnessBarFill.Width = Math.Max(0,
+            BrightnessBarTrack.ActualWidth * Math.Clamp(_displayBrightnessPercent, 0, 100) / 100);
+    }
+
+    private async Task PollBrightnessAsync()
+    {
+        if (_brightnessPolling || _brightnessSupported == false) return;
+        _brightnessPolling = true;
+        try
+        {
+            // All WMI calls run off the dispatcher. Only built-in monitors expose
+            // WmiMonitorBrightness; desktop monitors usually return unsupported.
+            var reading = await Task.Run(() =>
+            {
+                bool supported = SystemControlService.IsBrightnessSupported();
+                return (supported, level: supported ? SystemControlService.GetBrightness() : -1.0);
+            });
+            _brightnessSupported = reading.supported;
+            if (!IsLoaded || reading.level < 0) return;
+
+            if (_lastBrightness < 0)
+            {
+                _lastBrightness = reading.level; // baseline: do not show on startup
+                return;
+            }
+            if (Math.Abs(reading.level - _lastBrightness) < 0.5) return;
+
+            _lastBrightness = reading.level;
+            if (!_gameMode && !_expanded)
+                ShowTransientCard(TransientCardKind.Brightness, "", "", "", null,
+                    TimeSpan.FromSeconds(2), reading.level);
+        }
+        catch
+        {
+            // A temporarily disconnected display must not take down the UI.
+        }
+        finally
+        {
+            _brightnessPolling = false;
+        }
     }
 
     private async Task InitializeNotificationsAsync()
@@ -847,18 +903,17 @@ public partial class MainWindow : Window
         string details, byte[]? artwork, TimeSpan duration, double? progress = null)
     {
         if (_gameMode || _expanded) return;
-        // Keep higher-priority information readable if the OS volume changes meanwhile.
-        if (kind == TransientCardKind.Volume &&
+        if (kind is TransientCardKind.Volume or TransientCardKind.Brightness &&
             _transientKind is TransientCardKind.Notification or TransientCardKind.Track)
             return;
-        if (kind == TransientCardKind.Track && _transientKind == TransientCardKind.Notification)
+        if (kind == TransientCardKind.Track &&
+            _transientKind == TransientCardKind.Notification)
             return;
 
-        _transientKind = kind;
+        bool sameState = _transientKind == kind;
         switch (kind)
         {
             case TransientCardKind.Track:
-            {
                 FullTrackTitle.Text = title;
                 FullTrackArtist.Text = subtitle;
                 FullTrackAlbum.Text = details;
@@ -870,7 +925,6 @@ public partial class MainWindow : Window
                 FullTrackFallback.Visibility = FullTrackArtwork.Source is null
                     ? Visibility.Visible : Visibility.Collapsed;
                 break;
-            }
             case TransientCardKind.Notification:
                 NotificationAppName.Text = title;
                 NotificationTitle.Text = subtitle;
@@ -879,33 +933,45 @@ public partial class MainWindow : Window
                     ? Visibility.Collapsed : Visibility.Visible;
                 break;
             case TransientCardKind.Volume:
-            {
-                double volume = Math.Clamp(progress ?? _volumeMonitor.CurrentVolumePercent, 0, 100);
-                _updatingVolumeSlider = true;
-                try { IslandVolumeSlider.Value = volume; }
-                finally { _updatingVolumeSlider = false; }
-                VolumeLevelText.Text = $"{volume:0}%";
+                _displayVolumePercent = Math.Clamp(progress ?? _volumeMonitor.CurrentVolumePercent, 0, 100);
+                VolumeLevelText.Text = $"{_displayVolumePercent:0}%";
+                UpdateVolumeBar();
                 break;
-            }
+            case TransientCardKind.Brightness:
+                _displayBrightnessPercent = Math.Clamp(progress ?? 0, 0, 100);
+                BrightnessLevelText.Text = $"{_displayBrightnessPercent:0}%";
+                UpdateBrightnessBar();
+                break;
         }
 
-        UpdateTrackDisplay();
-        UpdateCollapsedWidth(animate: !_expanded);
-        var active = kind switch
+        // Repeated volume/brightness steps NEVER recompose the layout, morph
+        // the Body or restart the opacity animation: only the fill and number move.
+        if (!sameState)
         {
-            TransientCardKind.Volume => (UIElement)VolumeIslandView,
-            TransientCardKind.Track => FullTrackCardView,
-            _ => NotificationIslandView
-        };
-        active.BeginAnimation(UIElement.OpacityProperty, null);
-        active.Opacity = 0;
-        active.BeginAnimation(UIElement.OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170)));
+            _transientKind = kind;
+            _hoverExpandTimer.Stop();
+            UpdateTrackDisplay();
+            UpdateCollapsedWidth(animate: !_expanded);
+            AnimateCompactTransition();
+        }
 
-        _hoverExpandTimer.Stop();
         _transientTimer.Stop();
         _transientTimer.Interval = duration;
         _transientTimer.Start();
+    }
+
+    private void AnimateCompactTransition()
+    {
+        // A single soft reveal per distinct state transition (not per sound key press).
+        CollapsedView.BeginAnimation(UIElement.OpacityProperty, null);
+        CollapsedView.Opacity = 1;
+        CollapsedView.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(175))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(45),
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            });
     }
 
     private void HideTransientCard()
@@ -915,6 +981,7 @@ public partial class MainWindow : Window
         _transientKind = TransientCardKind.None;
         UpdateTrackDisplay();
         UpdateCollapsedWidth(animate: !_expanded);
+        AnimateCompactTransition();
     }
 
     private void SetTrackLabel(TextBlock block, string title, string artist)
