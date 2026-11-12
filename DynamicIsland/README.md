@@ -11,15 +11,44 @@ high-contrast text, and three configurable accent colors.
 - .NET 10 SDK to build from source
 - Microsoft Edge WebView2 Runtime for CDN weather animations; the built-in
   animated scene remains available without it
+- WinApp CLI for MSIX packaging (install with `winget install Microsoft.winappcli`)
 
 ## Run from source
 
 ```powershell
-dotnet run --project DynamicIsland.csproj -c Release
+dotnet run --project DynamicIsland/DynamicIsland.csproj -c Release
 ```
 
-For a self-contained Windows x64 executable, run `build.bat` from this folder.
-The output is written to `publish\AURA.exe`.
+## Build a portable EXE
+
+Run `DynamicIsland/build.bat`. The self-contained Windows x64 executable is
+written to `DynamicIsland/publish/AURA.exe`.
+
+## Build an MSIX package
+
+Run `build-msix.bat` from the repository root. The script:
+
+1. Creates a local development certificate when one does not exist.
+2. Publishes the WPF app as a self-contained Windows x64 folder.
+3. Packages and signs the output as MSIX using `Package.appxmanifest`.
+
+Install the development certificate once on the target PC:
+
+```powershell
+winapp cert install .\devcert.pfx
+```
+
+Then install the generated `.msix` package. Windows will register AURA with
+package identity and the declared User Notification Listener capability,
+which is required for the app's explicit notification-access request.
+
+The self-signed certificate is for local testing only. For public distribution,
+sign the package with a trusted code-signing certificate. Keep `devcert.pfx`
+private and do not commit it.
+
+The ordinary portable EXE build remains available and does not gain package
+identity; Windows notification-listener access is available only in the
+packaged MSIX installation.
 
 ## Features
 
@@ -35,8 +64,8 @@ The output is written to `publish\AURA.exe`.
   controls depend on the capabilities each player exposes. Includes album art,
   position-aware seeking, playback controls, and system volume; select among
   active media sources and choose from three collapsed layouts with title/artist,
-  cover art, and a live system-audio
-  spectrum. Audio is analyzed in memory and is not recorded or stored.
+  cover art, and a live system-audio spectrum. Audio is analyzed in memory and
+  is not recorded or stored.
 - Optional compact weather icon and temperature in the collapsed island/notch
 - Live weather conditions and forecast with animated Meteocons SVGs from the
   CDN (local animated fallback when offline), plus a categorized launcher with
