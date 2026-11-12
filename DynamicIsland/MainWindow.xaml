@@ -42,17 +42,23 @@
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                     <!-- Фиксированный блок часов: цифры не меняют ширину строки и не сдвигают соседние элементы. -->
                     <Border x:Name="CollapsedClockBlock" Width="66" Height="28" CornerRadius="9"
-                            Background="{DynamicResource BgSurfaceBrush}" VerticalAlignment="Center"
+                            Background="{DynamicResource BgCardBrush}" VerticalAlignment="Center"
                             HorizontalAlignment="Center" Margin="0,0,0,0">
                         <Grid>
-                            <TextBlock x:Name="ClockText" Text="22:06" FontFamily="Consolas"
-                                       FontSize="15" FontWeight="SemiBold" TextAlignment="Center"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       Width="48" Typography.NumeralAlignment="Tabular"/>
-                            <TextBlock x:Name="ClockSeconds" Text=":03" FontFamily="Consolas"
-                                       FontSize="9" Foreground="{DynamicResource TextSecBrush}"
-                                       VerticalAlignment="Bottom" HorizontalAlignment="Right"
-                                       Margin="0,0,2,4" Width="17" TextAlignment="Left"
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="46"/>
+                                <ColumnDefinition Width="18"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="ClockText" Grid.Column="0" Text="22:06"
+                                       FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
+                                       TextAlignment="Center" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" Width="46"
+                                       Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock x:Name="ClockSeconds" Grid.Column="1" Text=":03"
+                                       FontFamily="Consolas" FontSize="9"
+                                       Foreground="{DynamicResource TextSecBrush}"
+                                       VerticalAlignment="Bottom" HorizontalAlignment="Left"
+                                       Margin="0,0,0,4" Width="18" TextAlignment="Left"
                                        Visibility="Collapsed"/>
                         </Grid>
                     </Border>
@@ -187,7 +193,7 @@
 
                     <!-- Часы в отдельной фиксированной ячейке. Появляются только после полного раскрытия ширины островка. -->
                     <Border x:Name="ExpandedClockBlock" Width="82" Height="34" CornerRadius="10"
-                            Background="{DynamicResource BgSurfaceBrush}"
+                            Background="{DynamicResource BgCardBrush}"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             Opacity="0" Visibility="Collapsed">
                         <TextBlock x:Name="ExpandedClockText" Text="22:06:00"
