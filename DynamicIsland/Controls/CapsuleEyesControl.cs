@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
 
 namespace DynamicIsland.Controls;
 
@@ -79,24 +80,43 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
         }
     }
 
-    /// <summary>Receives pointer coordinates and bounds of the full collapsed island.</summary>
-    public void TrackPointer(Point point, Size pointerArea)
+    // Read the desktop cursor position directly: gaze follows the pointer even
+    // when it is outside the Dynamic Island and over another application.
+    private void UpdateGazeFromDesktopCursor()
     {
-        // Normalize against the whole island, not the tiny 30x22 eye control.
-        // This keeps cursor direction meaningful across the complete collapsed view.
-        _targetGazeX = Math.Clamp((point.X / Math.Max(1, pointerArea.Width) - 0.5) * 2, -1, 1);
-        _targetGazeY = Math.Clamp((point.Y / Math.Max(1, pointerArea.Height) - 0.5) * 2, -1, 1);
+        if (!GetCursorPos(out var cursor)) return;
+
+        Point eyeCenter;
+        try
+        {
+            eyeCenter = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        const double horizontalRange = 240.0;
+        const double verticalRange = 160.0;
+        _targetGazeX = Math.Clamp((cursor.X - eyeCenter.X) / horizontalRange, -1, 1);
+        _targetGazeY = Math.Clamp((cursor.Y - eyeCenter.Y) / verticalRange, -1, 1);
     }
 
-    public void PointerLeft()
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CursorPoint point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorPoint
     {
-        _targetGazeX = 0;
-        _targetGazeY = 0;
+        public int X;
+        public int Y;
     }
 
     private void OnAnimationTick(object? sender, EventArgs e)
     {
         if (_disposed || !IsVisible) return;
+
+        UpdateGazeFromDesktopCursor();
 
         _gazeX += (_targetGazeX - _gazeX) * 0.24;
         _gazeY += (_targetGazeY - _gazeY) * 0.24;
