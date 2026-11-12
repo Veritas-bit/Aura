@@ -154,3 +154,19 @@ Audio events update the volume line in place; repeated volume keystrokes must
 not restart the transient opacity or Body-size animations. A brightness bar
 appears for supported built-in screens when Windows WMI reports a change.
 Unsupported displays do not show a brightness overlay.
+
+## Compact morph, battery and brightness monitoring
+
+- The clock/eyes/battery compact body is now 235×46 DIP, or 251×46 DIP with
+  seconds, providing 10 extra DIP on each side of the companion eye group.
+  Each eye remains 14×24 DIP with a 12 DIP gap and 7 DIP radius.
+- Battery icon **and** percentage use fixed charge colors, independent of the
+  accent theme: 0–20 red; 21–80 yellow; 81–100 green.
+- Compact UI content is hidden during the full 225 ms Body geometry morph,
+  and revealed only after it has finished. Consecutive volume steps update
+  bar/percent in place without restarting the morph.
+- Brightness is read from Windows WMI for built-in screens. External primary
+  displays additionally use **read-only** DDC/CI GetMonitorBrightness, but
+  only after GetMonitorCapabilities explicitly reports brightness support.
+  If the display does not support either interface, no brightness card is
+  displayed. Monitor DDC/CI support and device drivers may vary.

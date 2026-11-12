@@ -31,8 +31,11 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _transientTimer;
     private readonly DispatcherTimer _volumePollTimer;
     private readonly DispatcherTimer _brightnessPollTimer;
+    private readonly DispatcherTimer _compactMorphTimer;
+    private bool _compactMorphing;
+    private double _compactTargetWidth;
+    private double _compactTargetHeight;
     private bool _brightnessPolling;
-    private bool? _brightnessSupported;
     private double _lastBrightness = -1;
     private double _displayVolumePercent;
     private double _displayBrightnessPercent;
@@ -60,6 +63,11 @@ public partial class MainWindow : Window
     private bool _volumeEventsAttached;
 
     // Геометрия свёрнутого вида
+    // Battery colors are fixed by charge, never tinted by the application theme.
+    private static readonly Brush BatteryLowColor = new SolidColorBrush(Color.FromRgb(0xF0, 0x4B, 0x55));
+    private static readonly Brush BatteryMidColor = new SolidColorBrush(Color.FromRgb(0xFF, 0xCD, 0x38));
+    private static readonly Brush BatteryHighColor = new SolidColorBrush(Color.FromRgb(0x47, 0xD1, 0x7D));
+
     private const double CollapsedH = 46;
     private const double GameH = 30;
     private const double BodyGap = 14;
@@ -97,6 +105,8 @@ public partial class MainWindow : Window
         _marqueeTimer.Tick += (_, _) => AdvanceTrackMarquee();
         _transientTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _transientTimer.Tick += (_, _) => HideTransientCard();
+        _compactMorphTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _compactMorphTimer.Tick += (_, _) => FinishCompactMorph();
         _volumeMonitor.VolumeChanged += OnSystemVolumeChanged;
         _volumeMonitor.OutputDeviceChanged += OnOutputDeviceChanged;
         _volumeEventsAttached = true;
@@ -199,6 +209,7 @@ public partial class MainWindow : Window
             _equalizerTimer.Stop();
             _marqueeTimer.Stop();
             _transientTimer.Stop();
+            _compactMorphTimer.Stop();
             _volumePollTimer.Stop();
             _brightnessPollTimer.Stop();
             if (_volumeEventsAttached)
@@ -272,8 +283,8 @@ public partial class MainWindow : Window
             TransientCardKind.Notification => (325, 80),
             _ when ShowTrack => (325, 24),
             _ when SettingsService.Current.ShowClock && SettingsService.Current.ShowSeconds
-                => (231, 46),
-            _ => (215, 46)
+                => (251, 46),
+            _ => (235, 46)
         };
     }
 
@@ -383,8 +394,9 @@ public partial class MainWindow : Window
         CollapsedView.Clip = Body.Data.Clone();
         CollapsedTrackView.Clip = null;
         // Clear the old layout first, morph the surface, then reveal the new layout.
-        CollapsedView.Opacity = SmoothStep(Math.Clamp((0.16 - c) / 0.16, 0, 1));
-        CollapsedView.IsHitTestVisible = !_expanded && c < 0.1;
+        CollapsedView.Opacity = _compactMorphing ? 0
+            : SmoothStep(Math.Clamp((0.16 - c) / 0.16, 0, 1));
+        CollapsedView.IsHitTestVisible = !_expanded && !_compactMorphing && c < 0.1;
 
         ExpandedView.Margin = new Thickness(x + margin + 4 * UiScale, y + 2 * UiScale, 0, 0);
         ExpandedView.Width = ExpandedContentW - 8 * UiScale;
@@ -477,38 +489,78 @@ public partial class MainWindow : Window
     private void UpdateCollapsedWidth(bool animate)
     {
         var target = TargetCollapsedSize();
+        if (Math.Abs(_compactTargetWidth - target.Width) < 0.01 &&
+            Math.Abs(_compactTargetHeight - target.Height) < 0.01)
+            return; // Never restart an in-flight morph for the same size.
+
+        _compactTargetWidth = target.Width;
+        _compactTargetHeight = target.Height;
         CollapsedStack.Width = target.Width;
 
         double currentW = CollapsedWidth > 0 ? CollapsedWidth : target.Width;
         double currentH = CompactHeight > 0 ? CompactHeight : target.Height;
-        if (!animate || !IsLoaded)
+        bool dimensionsChanged =
+            Math.Abs(currentW - target.Width) > 0.25 ||
+            Math.Abs(currentH - target.Height) > 0.25;
+
+        _compactMorphTimer.Stop();
+        if (!animate || !IsLoaded || _expanded || !dimensionsChanged)
         {
+            _compactMorphing = false;
             BeginAnimation(CollapsedWidthProperty, null);
             BeginAnimation(CompactHeightProperty, null);
             CollapsedWidth = target.Width;
             CompactHeight = target.Height;
+            ApplyShape();
             return;
         }
 
+        // Keep every compact view hidden for the entire Body morph.
+        // The incoming view was already selected, but it cannot paint until
+        // both geometry animations have fully reached their final values.
+        _compactMorphing = true;
+        CollapsedView.BeginAnimation(UIElement.OpacityProperty, null);
+        ApplyShape();
+
+        const int morphMilliseconds = 225;
         var easing = new CubicBezierEase { X1 = 0.2, Y1 = 0.7, X2 = 0.2, Y2 = 1 };
         if (Math.Abs(currentW - target.Width) > 0.25)
             BeginAnimation(CollapsedWidthProperty, new DoubleAnimation(
-                currentW, target.Width, TimeSpan.FromMilliseconds(225))
+                currentW, target.Width, TimeSpan.FromMilliseconds(morphMilliseconds))
             { EasingFunction = easing, FillBehavior = FillBehavior.HoldEnd });
-        else
-        {
-            BeginAnimation(CollapsedWidthProperty, null);
-            CollapsedWidth = target.Width;
-        }
 
         if (Math.Abs(currentH - target.Height) > 0.25)
             BeginAnimation(CompactHeightProperty, new DoubleAnimation(
-                currentH, target.Height, TimeSpan.FromMilliseconds(225))
+                currentH, target.Height, TimeSpan.FromMilliseconds(morphMilliseconds))
             { EasingFunction = easing, FillBehavior = FillBehavior.HoldEnd });
-        else
+
+        // One render frame of safety margin after the geometry has finished.
+        _compactMorphTimer.Interval = TimeSpan.FromMilliseconds(morphMilliseconds + 25);
+        _compactMorphTimer.Start();
+    }
+
+    private void FinishCompactMorph()
+    {
+        _compactMorphTimer.Stop();
+
+        // Set the base DP values before removing HoldEnd animations so the
+        // surface never briefly jumps back to its previous dimensions.
+        CollapsedWidth = _compactTargetWidth;
+        CompactHeight = _compactTargetHeight;
+        BeginAnimation(CollapsedWidthProperty, null);
+        BeginAnimation(CompactHeightProperty, null);
+
+        _compactMorphing = false;
+        ApplyShape();
+
+        if (!_expanded)
         {
-            BeginAnimation(CompactHeightProperty, null);
-            CompactHeight = target.Height;
+            CollapsedView.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(115))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                    FillBehavior = FillBehavior.Stop
+                });
         }
     }
 
@@ -638,9 +690,10 @@ public partial class MainWindow : Window
                 : "ic_battery_full";
             if (Application.Current.FindResource(key) is Geometry g)
                 BatteryIcon.Data = g;
-            BatteryIcon.Fill = st.BatteryCharging
-                ? (Brush)Application.Current.FindResource("GreenBrush")
-                : (Brush)FindResource("TextSecBrush");
+            Brush batteryColor = st.BatteryPercent <= 20 ? BatteryLowColor
+                : st.BatteryPercent <= 80 ? BatteryMidColor : BatteryHighColor;
+            BatteryIcon.Fill = batteryColor;
+            BatteryText.Foreground = batteryColor;
             BatteryText.Text = st.BatteryPercent >= 0 ? $"{st.BatteryPercent}%" : "—";
         }
 
@@ -814,31 +867,26 @@ public partial class MainWindow : Window
 
     private async Task PollBrightnessAsync()
     {
-        if (_brightnessPolling || _brightnessSupported == false) return;
+        if (_brightnessPolling) return;
         _brightnessPolling = true;
         try
         {
             // All WMI calls run off the dispatcher. Only built-in monitors expose
             // WmiMonitorBrightness; desktop monitors usually return unsupported.
-            var reading = await Task.Run(() =>
-            {
-                bool supported = SystemControlService.IsBrightnessSupported();
-                return (supported, level: supported ? SystemControlService.GetBrightness() : -1.0);
-            });
-            _brightnessSupported = reading.supported;
-            if (!IsLoaded || reading.level < 0) return;
+            var level = await Task.Run(BrightnessMonitorService.ReadCurrentBrightness);
+            if (!IsLoaded || level < 0) return;
 
             if (_lastBrightness < 0)
             {
-                _lastBrightness = reading.level; // baseline: do not show on startup
+                _lastBrightness = level; // baseline: do not show on startup
                 return;
             }
-            if (Math.Abs(reading.level - _lastBrightness) < 0.5) return;
+            if (Math.Abs(level - _lastBrightness) < 0.5) return;
 
-            _lastBrightness = reading.level;
+            _lastBrightness = level;
             if (!_gameMode && !_expanded)
                 ShowTransientCard(TransientCardKind.Brightness, "", "", "", null,
-                    TimeSpan.FromSeconds(2), reading.level);
+                    TimeSpan.FromSeconds(2), level);
         }
         catch
         {
@@ -952,26 +1000,11 @@ public partial class MainWindow : Window
             _hoverExpandTimer.Stop();
             UpdateTrackDisplay();
             UpdateCollapsedWidth(animate: !_expanded);
-            AnimateCompactTransition();
         }
 
         _transientTimer.Stop();
         _transientTimer.Interval = duration;
         _transientTimer.Start();
-    }
-
-    private void AnimateCompactTransition()
-    {
-        // A single soft reveal per distinct state transition (not per sound key press).
-        CollapsedView.BeginAnimation(UIElement.OpacityProperty, null);
-        CollapsedView.Opacity = 1;
-        CollapsedView.BeginAnimation(UIElement.OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(175))
-            {
-                BeginTime = TimeSpan.FromMilliseconds(45),
-                FillBehavior = FillBehavior.Stop,
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            });
     }
 
     private void HideTransientCard()
@@ -981,7 +1014,6 @@ public partial class MainWindow : Window
         _transientKind = TransientCardKind.None;
         UpdateTrackDisplay();
         UpdateCollapsedWidth(animate: !_expanded);
-        AnimateCompactTransition();
     }
 
     private void SetTrackLabel(TextBlock block, string title, string artist)

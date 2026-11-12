@@ -25,7 +25,7 @@
 
             <!-- Six Figma-defined compact layouts. The black Body is the only outer surface.
                  Actual Body sizes: 215x46, 231x46, 325x24, 325x24, 325x80, 325x80. -->
-            <Grid x:Name="CollapsedView" Width="215" Height="46" Cursor="Hand"
+            <Grid x:Name="CollapsedView" Width="235" Height="46" Cursor="Hand"
                   Background="#01000000" ClipToBounds="True"
                   HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Grid.ContextMenu>
@@ -39,13 +39,13 @@
 
                 <!-- Base 215x46; seconds add exactly 16 to the clock group (231x46).
                      No dividing line. Fixed 20 DIP outer padding and section gaps. -->
-                <Grid x:Name="CollapsedStack" Width="215" Height="46"
+                <Grid x:Name="CollapsedStack" Width="235" Height="46"
                       VerticalAlignment="Center" HorizontalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="20"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="20"/>
-                        <ColumnDefinition Width="40"/>
+                        <ColumnDefinition Width="60"/>
                         <ColumnDefinition Width="20"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="20"/>
@@ -73,7 +73,7 @@
 
                     <!-- Drawing viewport includes 3 DIP of tracking room around 14x24 eyes. -->
                     <controls:CapsuleEyesControl x:Name="CompanionEyes" Grid.Column="3"
-                                                  Width="46" Height="32"
+                                                  Width="60" Height="32"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   AccentBrush="{DynamicResource AccentBrush}"
                                                   ToolTip="AURA Companion"/>

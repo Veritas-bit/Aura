@@ -39,7 +39,7 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
 
     public CapsuleEyesControl()
     {
-        Width = 46; // 40 DIP eyes + 3 DIP movement space on each side
+        Width = 60; // two 14 DIP eyes + 12 DIP gap + 10 DIP tracking space per side
         Height = 32; // 24 DIP eyes + 4 DIP movement space vertically
         IsHitTestVisible = false;
         SnapsToDevicePixels = true;
@@ -165,7 +165,7 @@ public sealed class CapsuleEyesControl : FrameworkElement, IDisposable
         double totalWidth = eyeWidth * 2 + gap;
         double left = (width - totalWidth) / 2;
         double top = (height - eyeHeight) / 2 + _gazeY * 3;
-        left += _gazeX * 3;
+        left += _gazeX * 8;
         var brush = AccentBrush ?? Brushes.MediumPurple;
 
         DrawCapsule(drawingContext, brush, left, top, eyeWidth, eyeHeight);
