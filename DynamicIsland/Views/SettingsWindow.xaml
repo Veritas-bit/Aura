@@ -223,15 +223,9 @@
                                     <TextBlock Text="В мини-режиме большая карточка показывается 4 секунды при смене трека. В развернутом — остаётся открытой, пока музыка играет."
                                                FontSize="11" TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextSecBrush}" Margin="0,1,0,11"/>
-                                    <TextBlock Text="Оформление большой карточки" FontSize="12"
-                                               FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,10">
-                                        <ToggleButton x:Name="SwReferenceTrackCard"
-                                                      Style="{StaticResource Switch}"
-                                                      Click="Display_Changed"/>
-                                        <TextBlock Text=" Карточка трека по SVG-референсу"
-                                                   FontSize="13" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <TextBlock Text="Оба режима используют один дизайн по SVG-референсу."
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecBrush}" Margin="0,0,0,10"/>
                                     <ComboBox x:Name="TrackDisplayModeBox" Visibility="Collapsed" MinHeight="38" Padding="10,4"
                                               Background="{DynamicResource BgDeepBrush}"
                                               Foreground="{DynamicResource TextPriBrush}"

@@ -862,10 +862,8 @@ public partial class MainWindow : Window
             (!transient && ShowPinnedTrackCard);
         if (trackCard)
             UpdateFullTrackCard(_currentMedia);
-        FullTrackCardView.Visibility = trackCard && SettingsService.Current.ReferenceTrackCard
-            ? Visibility.Visible : Visibility.Collapsed;
-        ClassicTrackCardView.Visibility = trackCard && !SettingsService.Current.ReferenceTrackCard
-            ? Visibility.Visible : Visibility.Collapsed;
+        // Use precisely the same view for track changes and the pinned player.
+        FullTrackCardView.Visibility = trackCard ? Visibility.Visible : Visibility.Collapsed;
         NotificationIslandView.Visibility = _transientKind == TransientCardKind.Notification
             ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1044,11 +1042,6 @@ public partial class MainWindow : Window
         FullTrackAlbum.Text = info.AlbumTitle;
         FullTrackAlbum.Visibility = string.IsNullOrWhiteSpace(info.AlbumTitle)
             ? Visibility.Collapsed : Visibility.Visible;
-        ClassicTrackTitle.Text = info.Title;
-        ClassicTrackArtist.Text = info.Artist;
-        ClassicTrackAlbum.Text = info.AlbumTitle;
-        ClassicTrackAlbum.Visibility = string.IsNullOrWhiteSpace(info.AlbumTitle)
-            ? Visibility.Collapsed : Visibility.Visible;
         TrackCardHeadphones.Visibility = _volumeMonitor.HeadphonesConnected
             ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1057,11 +1050,8 @@ public partial class MainWindow : Window
         {
             var bitmap = CreateTrackArtwork(info.Artwork);
             FullTrackArtwork.Source = bitmap;
-            ClassicTrackArtwork.Source = bitmap;
             FullTrackArtwork.Visibility = bitmap is null ? Visibility.Collapsed : Visibility.Visible;
-            ClassicTrackArtwork.Visibility = FullTrackArtwork.Visibility;
             FullTrackFallback.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
-            ClassicTrackFallback.Visibility = FullTrackFallback.Visibility;
             _fullTrackCardId = info.TrackId;
             _fullTrackCardArtwork = info.Artwork;
         }
