@@ -362,7 +362,8 @@ public partial class MainWindow : Window
         ExpandedView.Opacity = SmoothStep(Math.Clamp((c - 0.82) / 0.16, 0, 1));
         // The dedicated clock slot is revealed only when the island has reached
         // its full horizontal expansion; its fixed width prevents nav shifting.
-        bool fullyExpandedWidth = widthProgress >= 0.995 && c >= 0.995;
+        bool fullyExpandedWidth = SettingsService.Current.ShowClock
+                                  && widthProgress >= 0.995 && c >= 0.995;
         ExpandedClockBlock.Visibility = fullyExpandedWidth ? Visibility.Visible : Visibility.Collapsed;
         ExpandedClockBlock.Opacity = fullyExpandedWidth ? ExpandedView.Opacity : 0;
         ExpandedView.IsHitTestVisible = _expanded && ExpandedView.Opacity > 0.95;
@@ -416,6 +417,7 @@ public partial class MainWindow : Window
         Body.Fill = new SolidColorBrush(bc);
         UpdateEqualizerColors();
 
+        CollapsedClockBlock.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         ClockText.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         ClockSeconds.Visibility = s.ShowClock && s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
         ClockDivider.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
