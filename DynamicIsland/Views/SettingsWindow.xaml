@@ -182,7 +182,7 @@
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                         <ToggleButton x:Name="SwWeatherInIsland" Style="{StaticResource Switch}" Click="Display_Changed"/>
-                                        <TextBlock Text=" Компактная погода в островке/вырезе" FontSize="13" VerticalAlignment="Center"/>
+                                        <TextBlock Text=" Погода в игровом вырезе" FontSize="13" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
@@ -192,10 +192,10 @@
                             <Border Background="{DynamicResource BgCardBrush}" CornerRadius="14" Padding="14"
                                     BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1">
                                 <StackPanel>
-                                    <TextBlock Text="Выберите компактный вид, который показывается во время воспроизведения."
+                                    <TextBlock Text="Мини-плеер — 325×24. При смене трека показывается карточка 325×80, затем плеер снова становится компактным."
                                                FontSize="12" TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextSecBrush}" Margin="0,0,0,8"/>
-                                    <ComboBox x:Name="TrackDisplayModeBox" MinHeight="38" Padding="10,4"
+                                    <ComboBox x:Name="TrackDisplayModeBox" Visibility="Collapsed" MinHeight="38" Padding="10,4"
                                               Background="{DynamicResource BgDeepBrush}"
                                               Foreground="{DynamicResource TextPriBrush}"
                                               BorderBrush="{DynamicResource BorderSoftBrush}"

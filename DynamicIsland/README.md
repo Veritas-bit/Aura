@@ -113,3 +113,28 @@ loaded from `bmcdn.nl`; AURA does not bundle their SVG files. See the
 [Meteocons license](https://github.com/basmilius/weather-icons/blob/main/LICENSE).
 If the WebView2 Runtime or network is unavailable, AURA uses its built-in
 animated weather scene instead.
+
+## Figma compact Island states
+
+The compact Body uses the exact device-independent dimensions specified for
+the six visual states (before the operating system's display DPI scaling):
+
+| State | Outer Body width × height |
+| --- | --- |
+| Clock, companion eyes, battery | 215 × 46 |
+| Clock + optional seconds, companion eyes, battery | 231 × 46 |
+| Interactive system volume | 325 × 24 |
+| Playing track + optional headphones/vertical volume meter | 325 × 24 |
+| Track change card | 325 × 80 |
+| Windows notification | 325 × 80 |
+
+Compact dimensions describe the **black Island itself**, not an inner overlay.
+The 325 × 80 cards have 24 DIP rounded corners rather than a full pill radius.
+Changes of the compact Body width and height animate together. The track card
+returns to the mini-player after four seconds; volume and notification panels
+are temporary, and the notification panel has priority over volume changes.
+
+The headphone icon is shown only when the active Windows playback endpoint is
+identified as headphones/headset by its Core Audio form factor or device name.
+An unsupported driver or ambiguous device name may be classified conservatively;
+AURA does not claim that every paired Bluetooth device is an active headphone.

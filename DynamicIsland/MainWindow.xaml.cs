@@ -790,7 +790,7 @@ public partial class MainWindow : Window
     {
         if (_updatingVolumeSlider || !IsLoaded || _transientKind != TransientCardKind.Volume)
             return;
-        SystemControlService.SetVolumeLevel(Math.Clamp(e.NewValue, 0, 100));
+        _volumeMonitor.SetVolumePercent(e.NewValue);
         VolumeLevelText.Text = $"{Math.Round(e.NewValue):0}%";
     }
 

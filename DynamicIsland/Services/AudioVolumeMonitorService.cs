@@ -99,6 +99,26 @@ public sealed class AudioVolumeMonitorService : IDisposable
         }
     }
 
+    /// <summary>Adjust the active output endpoint, without using a cached device from another service.</summary>
+    public void SetVolumePercent(double percent)
+    {
+        if (_disposed) return;
+        try
+        {
+            if (_device is null) RefreshDefaultDevice();
+            if (_device is null) return;
+            _device.AudioEndpointVolume.MasterVolumeLevelScalar =
+                (float)(Math.Clamp(percent, 0, 100) / 100);
+            if (percent > 0 && _device.AudioEndpointVolume.Mute)
+                _device.AudioEndpointVolume.Mute = false;
+        }
+        catch
+        {
+            // Device may have disconnected while dragging the slider.
+            RefreshDefaultDevice();
+        }
+    }
+
     private void OnEndpointVolumeChanged(AudioVolumeNotificationData args)
     {
         if (_disposed) return;
