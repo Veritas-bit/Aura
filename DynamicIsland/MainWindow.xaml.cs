@@ -782,6 +782,8 @@ public partial class MainWindow : Window
             : showTrack ? Visibility.Visible : Visibility.Collapsed;
         TransientCardView.Visibility = showTransient ? Visibility.Visible : Visibility.Collapsed;
         TrackCoverFrame.Visibility = ShowTrackCover ? Visibility.Visible : Visibility.Collapsed;
+        TrackHeadphonesIcon.Visibility = showTrack && !ShowTrackCover
+            ? Visibility.Visible : Visibility.Collapsed;
         SetTrackLabel(CollapsedTrackTitle, showTrack ? title : "", artist);
         SetTrackLabel(RepeatedTrackTitle, showTrack ? title : "", artist);
         CollapsedTrackView.ToolTip = showTrack ? trackText : null;
