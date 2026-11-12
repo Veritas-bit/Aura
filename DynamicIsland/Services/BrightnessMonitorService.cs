@@ -11,10 +11,28 @@ namespace DynamicIsland.Services;
 public static class BrightnessMonitorService
 {
     /// <summary>Returns 0..100 or -1 when the active display exposes no readable brightness.</summary>
-    public static double ReadCurrentBrightness()
+    public static string LastDiagnostic { get; private set; } = "Brightness not tested";
+
+    public static double ReadCurrentBrightness() => ReadCurrentBrightness(IntPtr.Zero);
+
+    /// <summary>Read the monitor showing AURA, then use WMI for built-in panels.</summary>
+    public static double ReadCurrentBrightness(IntPtr windowHandle)
     {
-        double internalBrightness = ReadInternalWmi();
-        return internalBrightness >= 0 ? internalBrightness : ReadExternalDdc();
+        double ddc = ReadExternalDdc(windowHandle);
+        if (ddc >= 0)
+        {
+            LastDiagnostic = $"DDC/CI brightness: {ddc:0}%";
+            return ddc;
+        }
+
+        double wmi = ReadInternalWmi();
+        if (wmi >= 0)
+        {
+            LastDiagnostic = $"WMI brightness: {wmi:0}%";
+            return wmi;
+        }
+        LastDiagnostic = "Brightness unavailable: target monitor does not expose DDC/CI VCP 0x10 or WMI brightness";
+        return -1;
     }
 
     private static double ReadInternalWmi()
@@ -40,13 +58,14 @@ public static class BrightnessMonitorService
         return -1;
     }
 
-    private static double ReadExternalDdc()
+    private static double ReadExternalDdc(IntPtr windowHandle)
     {
         try
         {
-            // Read only the primary display (where AURA is positioned).
-            // No writes or raw VCP commands are sent to external monitors.
-            IntPtr monitor = MonitorFromPoint(new NativePoint(0, 0), 1); // DEFAULTTOPRIMARY
+            // Use the display containing the AURA window instead of assuming (0,0).
+            IntPtr monitor = windowHandle != IntPtr.Zero
+                ? MonitorFromWindow(windowHandle, 2) // MONITOR_DEFAULTTONEAREST
+                : MonitorFromPoint(new NativePoint(0, 0), 1); // MONITOR_DEFAULTTOPRIMARY
             if (monitor == IntPtr.Zero ||
                 !GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, out uint count) ||
                 count == 0 || count > 16)
@@ -61,14 +80,20 @@ public static class BrightnessMonitorService
                 foreach (var physical in monitors)
                 {
                     if (physical.Handle == IntPtr.Zero) continue;
-                    if (!GetMonitorCapabilities(physical.Handle, out uint caps, out _))
-                        continue;
                     const uint MC_CAPS_BRIGHTNESS = 0x2;
-                    if ((caps & MC_CAPS_BRIGHTNESS) == 0) continue;
-                    if (!GetMonitorBrightness(physical.Handle, out uint min, out uint current, out uint max) ||
-                        max <= min) continue;
+                    bool highLevel = GetMonitorCapabilities(physical.Handle, out uint caps, out _) &&
+                        (caps & MC_CAPS_BRIGHTNESS) != 0;
+                    if (highLevel &&
+                        GetMonitorBrightness(physical.Handle, out uint min, out uint current, out uint max) &&
+                        max > min)
+                        return Math.Clamp(100.0 * (current - min) / (max - min), 0, 100);
 
-                    return Math.Clamp(100.0 * (current - min) / (max - min), 0, 100);
+                    // Some monitors expose brightness VCP 0x10 but do not report
+                    // the high-level MC_CAPS_BRIGHTNESS flag. Read-only fallback.
+                    const byte VCP_LUMINANCE = 0x10;
+                    if (GetVCPFeatureAndVCPFeatureReply(physical.Handle, VCP_LUMINANCE,
+                        IntPtr.Zero, out uint currentVcp, out uint maxVcp) && maxVcp > 0)
+                        return Math.Clamp(100.0 * currentVcp / maxVcp, 0, 100);
                 }
             }
             finally
@@ -97,6 +122,9 @@ public static class BrightnessMonitorService
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
+
     [DllImport("dxva2.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(
@@ -120,4 +148,10 @@ public static class BrightnessMonitorService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorBrightness(
         IntPtr physicalMonitor, out uint minimum, out uint current, out uint maximum);
+
+    [DllImport("dxva2.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVCPFeatureAndVCPFeatureReply(
+        IntPtr physicalMonitor, byte vcpCode, IntPtr codeType,
+        out uint currentValue, out uint maximumValue);
 }

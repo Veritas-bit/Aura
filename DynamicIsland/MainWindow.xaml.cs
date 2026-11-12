@@ -29,6 +29,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _equalizerTimer;
     private readonly DispatcherTimer _marqueeTimer;
     private readonly DispatcherTimer _transientTimer;
+    private DateTimeOffset _transientDeadline;
+    private string _brightnessDiagnosis = "";
     private readonly DispatcherTimer _volumePollTimer;
     private readonly DispatcherTimer _brightnessPollTimer;
     private readonly DispatcherTimer _compactMorphTimer;
@@ -104,8 +106,14 @@ public partial class MainWindow : Window
         _equalizerTimer.Start();
         _marqueeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
         _marqueeTimer.Tick += (_, _) => AdvanceTrackMarquee();
-        _transientTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
-        _transientTimer.Tick += (_, _) => HideTransientCard();
+        // Poll the deadline rather than rearming a one-shot per media timeline callback.
+        _transientTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        _transientTimer.Tick += (_, _) =>
+        {
+            if (_transientKind != TransientCardKind.None &&
+                DateTimeOffset.UtcNow >= _transientDeadline)
+                HideTransientCard();
+        };
         _compactMorphTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _compactMorphTimer.Tick += (_, _) => FinishCompactMorph();
         _volumeMonitor.VolumeChanged += OnSystemVolumeChanged;
@@ -117,7 +125,7 @@ public partial class MainWindow : Window
         _volumePollTimer.Start();
         // WMI brightness is probed off the UI thread; unsupported external monitors
         // never trigger a brightness transient.
-        _brightnessPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
+        _brightnessPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
         _brightnessPollTimer.Tick += async (_, _) => await PollBrightnessAsync();
         _brightnessPollTimer.Start();
         _notificationListener.NotificationReceived += OnDesktopNotificationReceived;
@@ -917,7 +925,20 @@ public partial class MainWindow : Window
         {
             // All WMI calls run off the dispatcher. Only built-in monitors expose
             // WmiMonitorBrightness; desktop monitors usually return unsupported.
-            var level = await Task.Run(BrightnessMonitorService.ReadCurrentBrightness);
+            IntPtr hostWindow = _hwnd; // Read the window handle on the UI thread.
+            var level = await Task.Run(() =>
+                BrightnessMonitorService.ReadCurrentBrightness(hostWindow));
+            string diagnosis = BrightnessMonitorService.LastDiagnostic;
+            if (!string.Equals(diagnosis, _brightnessDiagnosis, StringComparison.Ordinal))
+            {
+                _brightnessDiagnosis = diagnosis;
+                try
+                {
+                    var log = Path.Combine(SettingsService.DataDir, "brightness.log");
+                    File.AppendAllText(log, $"[{DateTime.Now:O}] {diagnosis}{Environment.NewLine}");
+                }
+                catch { /* logging must never interrupt the UI */ }
+            }
             if (!IsLoaded || level < 0) return;
 
             if (_lastBrightness < 0)
@@ -932,9 +953,18 @@ public partial class MainWindow : Window
                 ShowTransientCard(TransientCardKind.Brightness, "", "", "", null,
                     TimeSpan.FromSeconds(2), level);
         }
-        catch
+        catch (Exception exception)
         {
-            // A temporarily disconnected display must not take down the UI.
+            if (_brightnessDiagnosis != exception.GetType().Name)
+            {
+                _brightnessDiagnosis = exception.GetType().Name;
+                try
+                {
+                    File.AppendAllText(Path.Combine(SettingsService.DataDir, "brightness.log"),
+                        $"[{DateTime.Now:O}] Brightness error: {exception}{Environment.NewLine}");
+                }
+                catch { }
+            }
         }
         finally
         {
@@ -1050,13 +1080,14 @@ public partial class MainWindow : Window
         }
 
         _transientTimer.Stop();
-        _transientTimer.Interval = duration;
+        _transientDeadline = DateTimeOffset.UtcNow + duration;
         _transientTimer.Start();
     }
 
     private void HideTransientCard()
     {
         _transientTimer.Stop();
+        _transientDeadline = DateTimeOffset.MinValue;
         if (_transientKind == TransientCardKind.None) return;
         _transientKind = TransientCardKind.None;
         UpdateTrackDisplay();
