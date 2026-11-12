@@ -1,6 +1,7 @@
 <Window x:Class="DynamicIsland.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DynamicIsland.Controls"
         Title="AURA" Width="808" Height="640"
         WindowStyle="None" AllowsTransparency="True" Background="{x:Null}"
         ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
@@ -39,17 +40,31 @@
                 <!-- Одинаковые отступы: 14 px от краёв тела и между всеми элементами -->
                 <StackPanel x:Name="CollapsedStack" Grid.Row="0" Orientation="Horizontal"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- Часы слева -->
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock x:Name="ClockText" Text="22:06" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="ClockSeconds" Text=":03" FontSize="11" Foreground="{DynamicResource TextSecBrush}"
-                                   VerticalAlignment="Bottom" Margin="1,0,0,2" Visibility="Collapsed"/>
+                    <!-- Основное время не имеет фона и не резервирует место для секунд. -->
+                    <StackPanel x:Name="CollapsedClockBlock" Orientation="Horizontal"
+                                VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock x:Name="ClockText" Text="22:06"
+                                   FontFamily="Consolas" FontSize="15" FontWeight="SemiBold"
+                                   TextAlignment="Center" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Width="46"
+                                   Typography.NumeralAlignment="Tabular"/>
+                        <!-- Секунды — отдельная компактная плашка, занимающая место только когда включена. -->
+                        <Border x:Name="ClockSecondsBlock" Width="20" Height="18" CornerRadius="6"
+                                Background="{DynamicResource BgCardBrush}" Margin="2,0,0,0"
+                                VerticalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock x:Name="ClockSeconds" Text=":03"
+                                       FontFamily="Consolas" FontSize="9"
+                                       Foreground="{DynamicResource TextSecBrush}"
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"
+                                       TextAlignment="Center"/>
+                        </Border>
                     </StackPanel>
 
                     <Border x:Name="ClockDivider" Width="1" Height="22" Background="{DynamicResource BorderSoftBrush}"
                             Margin="14,0,12,0" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="AuraLabel" Text="AURA" FontSize="11" FontWeight="Bold"
-                               Foreground="{DynamicResource TextSecBrush}" VerticalAlignment="Center"/>
+                    <controls:CapsuleEyesControl x:Name="CompanionEyes" Width="30" Height="22"
+                                                  AccentBrush="{DynamicResource AccentBrush}"
+                                                  VerticalAlignment="Center" ToolTip="AURA Companion"/>
                     <!-- Батарея + статус-бар — единый блок справа -->
                     <StackPanel x:Name="StatsPanel" Orientation="Horizontal" Margin="14,0,0,0">
                         <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center">
@@ -89,6 +104,11 @@
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                     </Border>
+                    <Path x:Name="TrackHeadphonesIcon" Grid.Row="0" Grid.Column="0"
+                          Style="{StaticResource VecIcon}" Width="15" Height="15"
+                          Data="{StaticResource ic_headphones}" Fill="{DynamicResource TextSecBrush}"
+                          Margin="0,0,8,0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                          Visibility="Collapsed"/>
                     <Grid x:Name="TrackTextViewport" Grid.Row="0" Grid.Column="1" ClipToBounds="True"
                           VerticalAlignment="Center" Margin="0,0,10,0">
                         <StackPanel x:Name="TrackTextStrip" Orientation="Horizontal"
@@ -106,6 +126,43 @@
                     <Canvas x:Name="TrackEqualizer" Grid.Row="1" Grid.Column="1" Height="6"
                             Margin="0,0,10,2" ClipToBounds="True" IsHitTestVisible="False" Visibility="Collapsed"/>
                 </Grid>
+                <Border x:Name="TransientCardView" Grid.Row="0" Grid.RowSpan="2"
+                        Width="330" Height="62" Padding="9" CornerRadius="16"
+                        Background="{DynamicResource BgCardBrush}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Visibility="Collapsed" Opacity="0" ClipToBounds="True">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="46"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="44" Height="44" CornerRadius="10"
+                                Background="{DynamicResource BgDeepBrush}" ClipToBounds="True"
+                                VerticalAlignment="Center">
+                            <Grid>
+                                <Image x:Name="TransientArtwork" Stretch="UniformToFill" Visibility="Collapsed"/>
+                                <TextBlock x:Name="TransientGlyph" Text="♪" FontSize="25"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TransientTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPriBrush}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="TransientSubtitle" FontSize="10"
+                                       Foreground="{DynamicResource TextSecBrush}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="TransientDetails" FontSize="9"
+                                       Foreground="{DynamicResource TextSecBrush}" TextTrimming="CharacterEllipsis"/>
+                            <Border x:Name="TransientProgressTrack" Height="3" Margin="0,4,0,0"
+                                    CornerRadius="2" Background="{DynamicResource OverlayFaintBrush}"
+                                    HorizontalAlignment="Stretch" Visibility="Collapsed">
+                                <Border x:Name="TransientProgressFill" Width="0" Height="3"
+                                        CornerRadius="2" Background="{DynamicResource AccentBrush}"
+                                        HorizontalAlignment="Left"/>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
             </Grid>
 
             <!-- ================= РАЗВЁРНУТЫЙ ВИД ================= -->

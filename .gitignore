@@ -3,6 +3,13 @@
 **/obj/
 **/publish/
 **/publish_run/
+**/publish-msix/
+
+# Local MSIX signing material and generated packages
+devcert.pfx
+*.cer
+*.msix
+*.msixbundle
 
 # Visual Studio
 .vs/

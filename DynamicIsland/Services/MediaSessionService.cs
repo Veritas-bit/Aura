@@ -25,6 +25,7 @@ public sealed record MediaSessionInfo(
     public bool CanSeek { get; init; }
     public string SourceId { get; init; } = "";
     public string SourceName { get; init; } = "";
+    public string AlbumTitle { get; init; } = "";
 }
 
 public sealed class MediaSessionService : IDisposable
@@ -341,6 +342,7 @@ public sealed class MediaSessionService : IDisposable
                 SourceName = GetSourceName(session.SourceAppUserModelId),
                 Title = media.Title ?? "",
                 Artist = media.Artist ?? "",
+                AlbumTitle = media.AlbumTitle ?? "",
                 Position = trackChanged ? TimeSpan.Zero : Current.Position,
                 Duration = trackChanged ? TimeSpan.Zero : Current.Duration,
                 CapturedAt = trackChanged ? DateTimeOffset.UtcNow : Current.CapturedAt,
