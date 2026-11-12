@@ -28,7 +28,10 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _gameModeTimer;
     private readonly DispatcherTimer _equalizerTimer;
     private readonly DispatcherTimer _marqueeTimer;
+    private readonly DispatcherTimer _transientTimer;
+    private readonly DispatcherTimer _volumePollTimer;
     private readonly MediaSessionService _media = new();
+    private readonly NotificationListenerService _notificationListener = new();
     private readonly AudioSpectrumService _audioSpectrum = new();
     private readonly List<Rectangle> _equalizerBars = new();
     private readonly Dictionary<string, UserControl> _panels = new();
@@ -45,6 +48,10 @@ public partial class MainWindow : Window
     private string _displayedTrackId = "";
     private byte[]? _displayedArtwork;
     private TrayService? _tray;
+    private enum TransientCardKind { None, Track, Volume, Notification }
+    private TransientCardKind _transientKind;
+    private double _lastObservedVolume = -1;
+    private bool _lastObservedMute;
 
     // Геометрия свёрнутого вида
     private const double CollapsedH = 40;
@@ -80,6 +87,12 @@ public partial class MainWindow : Window
         _equalizerTimer.Start();
         _marqueeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
         _marqueeTimer.Tick += (_, _) => AdvanceTrackMarquee();
+        _transientTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _transientTimer.Tick += (_, _) => HideTransientCard();
+        _volumePollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _volumePollTimer.Tick += (_, _) => PollSystemVolume();
+        _volumePollTimer.Start();
+        _notificationListener.NotificationReceived += OnDesktopNotificationReceived;
 
         // Исходная форма тела и позиция окна до первого кадра
         Top = TopForMode();
@@ -115,10 +128,11 @@ public partial class MainWindow : Window
         SettingsService.Changed += ApplySettings;
 
         // после первой раскладки — пересчитать тело по замеренной ширине контента
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
             UpdateCollapsedWidth(animate: false);
             ApplyShape();
+            await InitializeNotificationsAsync();
         };
 
         SizeChanged += (_, _) =>
@@ -166,6 +180,10 @@ public partial class MainWindow : Window
             _monitor.Dispose();
             _equalizerTimer.Stop();
             _marqueeTimer.Stop();
+            _transientTimer.Stop();
+            _volumePollTimer.Stop();
+            _notificationListener.NotificationReceived -= OnDesktopNotificationReceived;
+            _notificationListener.Dispose();
             WeatherService.Updated -= OnWeatherUpdated;
             _audioSpectrum.LevelsUpdated -= OnAudioLevelsUpdated;
             _audioSpectrum.ErrorOccurred -= OnAudioSpectrumError;
@@ -218,9 +236,11 @@ public partial class MainWindow : Window
     }
     private double CollapsedHeight => _gameMode
         ? GameH * UiScale
+        : _transientKind != TransientCardKind.None ? 68 * UiScale
         : !ShowTrack ? CollapsedH * UiScale
         : (ShowTrackCover ? 32 : 30) * UiScale + (ShowTrackEqualizer ? 8 * UiScale : 0);
-    private double CollapsedContentInset => ShowTrackCover
+    private double CollapsedContentInset => _transientKind != TransientCardKind.None ? 0
+        : ShowTrackCover
         ? 0
         : IsNotch ? (NotchShoulder + 8) * UiScale : BodyGap * UiScale;
     private double ExpandedContentW => Math.Min(ExpandedContentWBase * UiScale, SystemParameters.WorkArea.Width * 0.84);
@@ -229,6 +249,7 @@ public partial class MainWindow : Window
     /// До первой раскладки — оценка: базовые 172 плюс элементы статус-бара.</summary>
     private double CollapsedContentW()
     {
+        if (_transientKind != TransientCardKind.None) return 330 * UiScale;
         if (CollapsedWidth > 4) return CollapsedWidth;
 
         if (IsLoaded)
@@ -327,7 +348,7 @@ public partial class MainWindow : Window
         CollapsedView.Margin = new Thickness(x + collapsedInset, y, 0, 0);
         CollapsedView.Width = Math.Max(1, contentW);
         CollapsedView.Height = collapsedH;
-        if (ShowTrack)
+        if (ShowTrack && _transientKind == TransientCardKind.None)
         {
             var trackClip = Body.Data.Clone();
             trackClip.Transform = new TranslateTransform(
@@ -452,12 +473,18 @@ public partial class MainWindow : Window
         CollapsedStack.Visibility = Visibility.Hidden;
         CollapsedStack.Measure(new Size(double.PositiveInfinity, CollapsedH * UiScale));
         double normalContentWidth = CollapsedStack.DesiredSize.Width;
-        CollapsedStack.Visibility = ShowTrack ? Visibility.Collapsed : Visibility.Visible;
+        CollapsedStack.Visibility = _transientKind != TransientCardKind.None || ShowTrack
+            ? Visibility.Collapsed : Visibility.Visible;
 
         double inset = CollapsedContentInset;
         double minimumContentWidth = Math.Max(0, 200 * UiScale - inset * 2);
         double target;
-        if (ShowTrack)
+        if (_transientKind != TransientCardKind.None)
+        {
+            target = 330 * UiScale;
+            TransientCardView.Width = target;
+        }
+        else if (ShowTrack)
         {
             CollapsedTrackTitle.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double titleWidth = CollapsedTrackTitle.DesiredSize.Width;
@@ -727,8 +754,15 @@ public partial class MainWindow : Window
         bool wasShowingEqualizer = ShowTrackEqualizer;
         double previousHeight = CollapsedHeight;
         _currentMedia = info;
-        if (trackChanged || artworkChanged || wasShowingTrack != ShowTrack)
+        if (trackChanged && info.HasTrack)
+        {
+            ShowTransientCard(TransientCardKind.Track, info.Title, info.Artist,
+                info.AlbumTitle, info.Artwork, TimeSpan.FromSeconds(4));
+        }
+        else if (trackChanged || artworkChanged || wasShowingTrack != ShowTrack)
+        {
             UpdateTrackDisplay();
+        }
 
         if (trackChanged || wasShowingTrack != ShowTrack || wasShowingCover != ShowTrackCover ||
             wasShowingEqualizer != ShowTrackEqualizer || previousHeight != CollapsedHeight)
@@ -739,12 +773,16 @@ public partial class MainWindow : Window
     private void UpdateTrackDisplay()
     {
         bool showTrack = ShowTrack;
+        bool showTransient = _transientKind != TransientCardKind.None;
         string title = _currentMedia.Title;
         string artist = _currentMedia.Artist;
         string trackText = string.IsNullOrWhiteSpace(artist) ? title : $"{title} — {artist}";
 
-        CollapsedStack.Visibility = showTrack ? Visibility.Collapsed : Visibility.Visible;
-        CollapsedTrackView.Visibility = showTrack ? Visibility.Visible : Visibility.Collapsed;
+        bool showTransient = _transientKind != TransientCardKind.None;
+        CollapsedStack.Visibility = showTransient || showTrack ? Visibility.Collapsed : Visibility.Visible;
+        CollapsedTrackView.Visibility = showTransient ? Visibility.Collapsed
+            : showTrack ? Visibility.Visible : Visibility.Collapsed;
+        TransientCardView.Visibility = showTransient ? Visibility.Visible : Visibility.Collapsed;
         TrackCoverFrame.Visibility = ShowTrackCover ? Visibility.Visible : Visibility.Collapsed;
         SetTrackLabel(CollapsedTrackTitle, showTrack ? title : "", artist);
         SetTrackLabel(RepeatedTrackTitle, showTrack ? title : "", artist);
@@ -762,6 +800,106 @@ public partial class MainWindow : Window
         _displayedTrackId = _currentMedia.TrackId;
         TrackEqualizer.Visibility = ShowTrackEqualizer ? Visibility.Visible : Visibility.Collapsed;
         Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+    }
+
+    private async Task InitializeNotificationsAsync()
+    {
+        if (!SettingsService.Current.NotificationsEnabled ||
+            !NotificationListenerService.IsPackaged)
+            return;
+
+        bool requestAccess = !SettingsService.Current.NotificationsPermissionRequested;
+        bool? allowed = await _notificationListener.StartAsync(requestAccess);
+        if (requestAccess && allowed.HasValue)
+        {
+            SettingsService.Current.NotificationsPermissionRequested = true;
+            SettingsService.NotifyChanged();
+        }
+    }
+
+    private void OnDesktopNotificationReceived(DesktopNotification notification)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+        {
+            string title = string.IsNullOrWhiteSpace(notification.Title)
+                ? notification.AppName : notification.Title;
+            ShowTransientCard(TransientCardKind.Notification, notification.AppName,
+                title, notification.Body, null, TimeSpan.FromSeconds(5));
+        }));
+    }
+
+    private void PollSystemVolume()
+    {
+        double volume = SystemControlService.GetVolumeLevel();
+        if (volume < 0) return;
+        bool muted = SystemControlService.GetMute();
+        if (_lastObservedVolume < 0)
+        {
+            _lastObservedVolume = volume;
+            _lastObservedMute = muted;
+            return;
+        }
+
+        bool changed = Math.Abs(volume - _lastObservedVolume) >= 1 ||
+                       muted != _lastObservedMute;
+        _lastObservedVolume = volume;
+        _lastObservedMute = muted;
+        if (!changed || _gameMode) return;
+
+        ShowTransientCard(TransientCardKind.Volume,
+            muted ? "Звук выключен" : "Громкость",
+            muted ? "Без звука" : $"{volume:0}%",
+            "Системный звук", null, TimeSpan.FromSeconds(1.8), muted ? 0 : volume);
+    }
+
+    private void ShowTransientCard(TransientCardKind kind, string title, string subtitle,
+        string details, byte[]? artwork, TimeSpan duration, double? progress = null)
+    {
+        if (_gameMode) return;
+        _transientKind = kind;
+        TransientTitle.Text = title;
+        TransientSubtitle.Text = subtitle;
+        TransientDetails.Text = details;
+        TransientGlyph.Text = kind switch
+        {
+            TransientCardKind.Volume => "◖",
+            TransientCardKind.Notification => "●",
+            _ => "♪"
+        };
+
+        var bitmap = CreateTrackArtwork(artwork);
+        TransientArtwork.Source = bitmap;
+        TransientArtwork.Visibility = bitmap is null ? Visibility.Collapsed : Visibility.Visible;
+        TransientGlyph.Visibility = bitmap is null ? Visibility.Visible : Visibility.Collapsed;
+
+        bool showProgress = kind == TransientCardKind.Volume && progress.HasValue;
+        TransientProgressTrack.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
+        TransientProgressFill.Width = showProgress ? 240 * Math.Clamp(progress!.Value, 0, 100) / 100 : 0;
+
+        TransientCardView.Width = 330 * UiScale;
+        TransientCardView.Visibility = Visibility.Visible;
+        TransientCardView.BeginAnimation(UIElement.OpacityProperty, null);
+        TransientCardView.Opacity = 0;
+        TransientCardView.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)));
+        UpdateTrackDisplay();
+        UpdateCollapsedWidth(animate: !_expanded && !_animating);
+
+        _transientTimer.Stop();
+        _transientTimer.Interval = duration;
+        _transientTimer.Start();
+    }
+
+    private void HideTransientCard()
+    {
+        _transientTimer.Stop();
+        if (_transientKind == TransientCardKind.None) return;
+        _transientKind = TransientCardKind.None;
+        TransientCardView.BeginAnimation(UIElement.OpacityProperty, null);
+        TransientCardView.Opacity = 0;
+        TransientCardView.Visibility = Visibility.Collapsed;
+        UpdateTrackDisplay();
+        UpdateCollapsedWidth(animate: !_expanded && !_animating);
     }
 
     private void SetTrackLabel(TextBlock block, string title, string artist)

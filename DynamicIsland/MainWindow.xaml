@@ -121,6 +121,43 @@
                     <Canvas x:Name="TrackEqualizer" Grid.Row="1" Grid.Column="1" Height="6"
                             Margin="0,0,10,2" ClipToBounds="True" IsHitTestVisible="False" Visibility="Collapsed"/>
                 </Grid>
+                <Border x:Name="TransientCardView" Grid.Row="0" Grid.RowSpan="2"
+                        Width="330" Height="62" Padding="9" CornerRadius="16"
+                        Background="{DynamicResource BgCardBrush}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Visibility="Collapsed" Opacity="0" ClipToBounds="True">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="46"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="44" Height="44" CornerRadius="10"
+                                Background="{DynamicResource BgDeepBrush}" ClipToBounds="True"
+                                VerticalAlignment="Center">
+                            <Grid>
+                                <Image x:Name="TransientArtwork" Stretch="UniformToFill" Visibility="Collapsed"/>
+                                <TextBlock x:Name="TransientGlyph" Text="♪" FontSize="25"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TransientTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPriBrush}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="TransientSubtitle" FontSize="10"
+                                       Foreground="{DynamicResource TextSecBrush}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="TransientDetails" FontSize="9"
+                                       Foreground="{DynamicResource TextSecBrush}" TextTrimming="CharacterEllipsis"/>
+                            <Border x:Name="TransientProgressTrack" Height="3" Margin="0,4,0,0"
+                                    CornerRadius="2" Background="{DynamicResource OverlayFaintBrush}"
+                                    HorizontalAlignment="Stretch" Visibility="Collapsed">
+                                <Border x:Name="TransientProgressFill" Width="0" Height="3"
+                                        CornerRadius="2" Background="{DynamicResource AccentBrush}"
+                                        HorizontalAlignment="Left"/>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
             </Grid>
 
             <!-- ================= РАЗВЁРНУТЫЙ ВИД ================= -->
