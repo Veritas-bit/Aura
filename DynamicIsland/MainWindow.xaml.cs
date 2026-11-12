@@ -161,6 +161,7 @@ public partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
+            CompanionEyes.Dispose();
             _tray?.Dispose();
             _monitor.Dispose();
             _equalizerTimer.Stop();
