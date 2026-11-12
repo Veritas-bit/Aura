@@ -40,9 +40,13 @@ public partial class App : Application
                     args.Exception.ToString());
             }
             catch { }
-            MessageBox.Show($"Непредвиденная ошибка:\n{args.Exception.Message}",
+            var root = args.Exception.GetBaseException();
+            var crashLog = System.IO.Path.Combine(SettingsService.DataDir, "crash.log");
+            MessageBox.Show(
+                $"Непредвиденная ошибка:\n{root.Message}\n\nПолная информация: {crashLog}",
                 "AURA", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
+            Shutdown(-1);
         };
 
         base.OnStartup(e);

@@ -97,7 +97,7 @@
                         <ColumnDefinition Width="51"/>
                     </Grid.ColumnDefinitions>
                     <Path Grid.Column="0" Style="{StaticResource VecIcon}" Width="14" Height="14"
-                          Data="{StaticResource ic_volume}" Fill="{DynamicResource TextSecBrush}"
+                          Data="{StaticResource ic_volume_2}" Fill="{DynamicResource TextSecBrush}"
                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     <Slider x:Name="IslandVolumeSlider" Grid.Column="1" Minimum="0" Maximum="100"
                             Height="18" Margin="0,0,7,0" VerticalAlignment="Center"

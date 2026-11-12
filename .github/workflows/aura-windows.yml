@@ -21,6 +21,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Validate all StaticResource references in XAML
+        shell: pwsh
+        run: ./.github/scripts/check-xaml-resources.ps1
+
       - name: Restore runtime-specific dependencies
         run: dotnet restore DynamicIsland/DynamicIsland.csproj -r win-x64
 
