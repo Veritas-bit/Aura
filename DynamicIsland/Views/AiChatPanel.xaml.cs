@@ -88,7 +88,7 @@ public partial class AiChatPanel : UserControl
 
     private async Task<string> AskAsync(Models.AppSettings st, string text)
     {
-        var messages = new List<object> { new { role = "system", content = "Ты — полезный ассистент-компаньон в приложении AURA. Отвечай кратко и по делу, по-русски." } };
+        var messages = new List<object> { new { role = "system", content = "Ты — полезный ассистент в приложении AURA. Отвечай кратко и по делу, по-русски." } };
         foreach (var (role, content) in _history.TakeLast(20))
             messages.Add(new { role, content });
 

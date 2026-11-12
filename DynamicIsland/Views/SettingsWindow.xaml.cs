@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using DynamicIsland.Models;
 using DynamicIsland.Services;
 
 namespace DynamicIsland.Views;
@@ -9,15 +10,11 @@ namespace DynamicIsland.Views;
 /// <summary>Отдельное окно настроек с боковой навигацией (в духе macOS).</summary>
 public partial class SettingsWindow : Window
 {
-    public const string AppVersion = "1.6.1";
-
-    private static readonly string[] Palette =
-        { "#7C4DFF", "#00E5FF", "#00E676", "#FF5252", "#FFD740", "#FF6DFF", "#FF9E40", "#FFFFFF" };
+    public const string AppVersion = "0.0.1";
 
     private static readonly (string Key, string IconKey, string Title)[] Sections =
     {
-        ("character", "ic_smile",               "Персонаж"),
-        ("themes",    "ic_palette",             "Темы"),
+        ("themes",    "ic_palette",             "Внешний вид"),
         ("general",   "ic_sliders_horizontal",  "Общее"),
         ("stats",     "ic_cpu",                 "Статус-бар"),
         ("hotkeys",   "ic_keyboard",            "Клавиши"),
@@ -38,7 +35,6 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         VersionLabel.Text = $"Версия {AppVersion}";
         UpdatesVersionText.Text = $"Версия {AppVersion}";
-        BuildPalette();
         BuildNav();
         BuildThemeCards();
         BuildHotkeys();
@@ -46,9 +42,13 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) =>
         {
             LoadValues();
-            SelectSection("character");
+            SelectSection("themes");
         };
-        SettingsService.Changed += () => { if (IsLoaded) LoadValues(); };
+        SettingsService.Changed += () =>
+        {
+            if (!IsLoaded) return;
+            LoadValues();
+        };
     }
 
     // ---------- Сайдбар ----------
@@ -57,6 +57,23 @@ public partial class SettingsWindow : Window
     {
         foreach (var (key, iconKey, title) in Sections)
         {
+            var icon = new System.Windows.Shapes.Path
+            {
+                Style = (Style)FindResource("VecIcon"),
+                Width = 16,
+                Height = 16,
+                Data = (Geometry)FindResource(iconKey),
+                Margin = new Thickness(0, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            icon.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "TextSecBrush");
+            var label = new TextBlock
+            {
+                Text = title,
+                FontSize = 12.5,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecBrush");
             var btn = new Button
             {
                 Cursor = Cursors.Hand,
@@ -67,18 +84,7 @@ public partial class SettingsWindow : Window
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Children =
-                    {
-                        new System.Windows.Shapes.Path
-                        {
-                            Style = (Style)FindResource("VecIcon"),
-                            Width = 15, Height = 15,
-                            Data = (Geometry)FindResource(iconKey),
-                            Margin = new Thickness(0, 0, 10, 0),
-                            VerticalAlignment = VerticalAlignment.Center
-                        },
-                        new TextBlock { Text = title, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }
-                    }
+                    Children = { icon, label }
                 }
             };
             btn.Template = NavTemplate();
@@ -91,6 +97,7 @@ public partial class SettingsWindow : Window
     private static ControlTemplate NavTemplate()
     {
         var border = new FrameworkElementFactory(typeof(Border));
+        border.Name = "NavBackground";
         border.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
         border.SetBinding(Border.PaddingProperty,
             new System.Windows.Data.Binding("Padding") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
@@ -102,13 +109,20 @@ public partial class SettingsWindow : Window
         content.SetBinding(ContentPresenter.ContentProperty,
             new System.Windows.Data.Binding("Content") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
         border.AppendChild(content);
-        return new ControlTemplate(typeof(Button)) { VisualTree = border };
+        var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+        template.Triggers.Add(new Trigger
+        {
+            Property = UIElement.IsMouseOverProperty,
+            Value = true,
+            Setters = { new Setter(Border.BackgroundProperty,
+                new DynamicResourceExtension("BgCardHoverBrush"), "NavBackground") }
+        });
+        return template;
     }
 
     private void SelectSection(string key)
     {
         _currentSection = key;
-        PageCharacter.Visibility = key == "character" ? Visibility.Visible : Visibility.Collapsed;
         PageThemes.Visibility = key == "themes" ? Visibility.Visible : Visibility.Collapsed;
         PageGeneral.Visibility = key == "general" ? Visibility.Visible : Visibility.Collapsed;
         PageStats.Visibility = key == "stats" ? Visibility.Visible : Visibility.Collapsed;
@@ -123,9 +137,27 @@ public partial class SettingsWindow : Window
             btn.Background = sel
                 ? (Brush)Application.Current.FindResource("AccentSoftBrush")
                 : Brushes.Transparent;
+            if (btn.Content is StackPanel row)
+            {
+                var icon = row.Children.OfType<System.Windows.Shapes.Path>().FirstOrDefault();
+                var label = row.Children.OfType<TextBlock>().FirstOrDefault();
+                var accent = k switch
+                {
+                    "general" or "hotkeys" or "updates" => "AccentSecondaryBrush",
+                    "stats" or "ai" => "AccentTertiaryBrush",
+                    _ => "AccentBrush"
+                };
+                icon?.SetResourceReference(System.Windows.Shapes.Shape.FillProperty,
+                    sel ? accent : "TextSecBrush");
+                label?.SetResourceReference(TextBlock.ForegroundProperty,
+                    sel ? accent : "TextSecBrush");
+                if (label is not null)
+                    label.FontWeight = sel ? FontWeights.SemiBold : FontWeights.Medium;
+            }
         }
         var section = Sections.First(s => s.Key == key);
         PageTitle.Text = section.Title;
+        PageTitle.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
     }
 
     // ---------- Загрузка значений ----------
@@ -135,15 +167,15 @@ public partial class SettingsWindow : Window
         _loaded = false;
         var s = SettingsService.Current;
 
-        HexBox.Text = s.EyeColor;
-        SwGlow.IsChecked = s.GlowEnabled;
-
         StyleIsland.IsChecked = s.CollapsedStyle != "Notch";
         StyleNotch.IsChecked = s.CollapsedStyle == "Notch";
 
         SwClock.IsChecked = s.ShowClock;
         SwSeconds.IsChecked = s.ShowSeconds;
         SwWeather.IsChecked = s.ShowWeather;
+        SwWeatherInIsland.IsChecked = s.ShowWeatherInIsland;
+        s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
+        TrackDisplayModeBox.SelectedIndex = s.CollapsedTrackDisplayMode - 1;
         SwBattery.IsChecked = s.ShowBattery;
         SwStats.IsChecked = s.ShowStats;
         SwCpu.IsChecked = s.StatCpu;
@@ -154,8 +186,11 @@ public partial class SettingsWindow : Window
         SwTopmost.IsChecked = s.Topmost;
         SwCollapseLoss.IsChecked = s.CollapseOnFocusLoss;
         SwAutostart.IsChecked = s.RunAtStartup;
-        OpacitySlider.Value = s.UiOpacity * 100;
-        OpacityText.Text = $"{s.UiOpacity * 100:0}%";
+        BlackBackground.IsChecked = !s.LightBackground;
+        WhiteBackground.IsChecked = s.LightBackground;
+        PrimaryAccentBox.Text = s.EyeColor;
+        SecondaryAccentBox.Text = s.SecondaryAccentColor;
+        TertiaryAccentBox.Text = s.TertiaryAccentColor;
 
         SelectHotkey(HotkeyPresets.Contains(s.Hotkey) ? s.Hotkey : HotkeyPresets[0]);
 
@@ -167,53 +202,6 @@ public partial class SettingsWindow : Window
 
         UpdateThemeSelection();
         _loaded = true;
-    }
-
-    // ---------- Цвет глаз ----------
-
-    private void BuildPalette()
-    {
-        foreach (var hex in Palette)
-        {
-            var b = new Button
-            {
-                Width = 26, Height = 26, Margin = new Thickness(3), Cursor = Cursors.Hand,
-                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
-                Tag = hex,
-                ToolTip = hex
-            };
-            b.Template = RoundButtonTemplate();
-            b.Click += (_, _) => SetEyeColor(hex);
-            PaletteWrap.Children.Add(b);
-        }
-    }
-
-    private static ControlTemplate RoundButtonTemplate()
-    {
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(13));
-        border.SetBinding(Border.BackgroundProperty,
-            new System.Windows.Data.Binding("Background") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
-        return new ControlTemplate(typeof(Button)) { VisualTree = border };
-    }
-
-    private void Hex_KeyDown(object s, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter) SetEyeColor(HexBox.Text);
-    }
-
-    private void Hex_Apply(object s, RoutedEventArgs e) => SetEyeColor(HexBox.Text);
-
-    private void SetEyeColor(string hex)
-    {
-        try
-        {
-            var color = (Color)ColorConverter.ConvertFromString(hex.Trim());
-            SettingsService.Current.EyeColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-            SettingsService.Current.Theme = "custom"; // ручной цвет отменяет тему
-            SettingsService.NotifyChanged();
-        }
-        catch { HexBox.Text = SettingsService.Current.EyeColor; }
     }
 
     // ---------- Темы ----------
@@ -271,19 +259,13 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>Цвета-точки для превью карточки темы.</summary>
-    private static IEnumerable<Color> PreviewColors(ThemeInfo theme) => theme.Key switch
+    private static IEnumerable<Color> PreviewColors(ThemeInfo theme)
     {
-        "system" => new[] { ThemeService.GetWindowsAccent() },
-        "auto" => new[]
-        {
-            ThemeService.Hsl(271, 91, 65), // утро
-            ThemeService.Hsl(350, 90, 70), // день
-            ThemeService.Hsl(25, 90, 60),  // вечер
-            ThemeService.Hsl(80, 90, 50),  // ночь
-        },
-        _ => new[] { theme.Primary, theme.Secondary, theme.Accent }
-            .Where(c => c.HasValue).Select(c => ThemeService.Hsl(c!.Value)),
-    };
+        var palette = ThemeService.GetThemePalette(theme.Key);
+        return palette is { } colors
+            ? new[] { colors.Primary, colors.Secondary, colors.Tertiary }
+            : Array.Empty<Color>();
+    }
 
     private void UpdateThemeSelection()
     {
@@ -316,6 +298,7 @@ public partial class SettingsWindow : Window
         st.ShowClock = SwClock.IsChecked == true;
         st.ShowSeconds = SwSeconds.IsChecked == true;
         st.ShowWeather = SwWeather.IsChecked == true;
+        st.ShowWeatherInIsland = SwWeatherInIsland.IsChecked == true;
         st.ShowBattery = SwBattery.IsChecked == true;
         st.ShowStats = SwStats.IsChecked == true;
         st.StatCpu = SwCpu.IsChecked == true;
@@ -324,11 +307,65 @@ public partial class SettingsWindow : Window
         SettingsService.NotifyChanged();
     }
 
+    private void TrackDisplayMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded || TrackDisplayModeBox.SelectedIndex < 0) return;
+        SettingsService.Current.CollapsedTrackDisplayMode = Math.Clamp(TrackDisplayModeBox.SelectedIndex + 1, 1, 3);
+        SettingsService.NotifyChanged();
+    }
+
+    private void BackgroundMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        var settings = SettingsService.Current;
+        settings.Theme = "custom";
+        settings.LightBackground = WhiteBackground.IsChecked == true;
+        SettingsService.NotifyChanged();
+    }
+
+    private void AccentColor_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded || sender is not TextBox box) return;
+        if (!TryParseAccent(box.Text, out var color))
+        {
+            MessageBox.Show(this, "Введите цвет в формате #RRGGBB.", "Некорректный цвет",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            LoadValues();
+            return;
+        }
+
+        var settings = SettingsService.Current;
+        settings.Theme = "custom";
+        var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        if (ReferenceEquals(box, PrimaryAccentBox))
+            settings.EyeColor = hex;
+        else if (ReferenceEquals(box, SecondaryAccentBox))
+            settings.SecondaryAccentColor = hex;
+        else
+            settings.TertiaryAccentColor = hex;
+        SettingsService.NotifyChanged();
+    }
+
+    private static bool TryParseAccent(string value, out Color color)
+    {
+        color = Colors.Transparent;
+        value = value.Trim();
+        if (value.Length != 7 || value[0] != '#') return false;
+        try
+        {
+            color = (Color)ColorConverter.ConvertFromString(value);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
     private void Behavior_Changed(object s, RoutedEventArgs e)
     {
         if (!_loaded) return;
         var st = SettingsService.Current;
-        st.GlowEnabled = SwGlow.IsChecked == true;
         st.Topmost = SwTopmost.IsChecked == true;
         st.CollapseOnFocusLoss = SwCollapseLoss.IsChecked == true;
         st.GameMode = SwGameMode.IsChecked == true;
@@ -343,20 +380,14 @@ public partial class SettingsWindow : Window
         SettingsService.NotifyChanged();
     }
 
-    private void Opacity_Changed(object s, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (OpacityText == null) return; // событие может прийти во время InitializeComponent
-        OpacityText.Text = $"{e.NewValue:0}%";
-        if (!_loaded) return;
-        SettingsService.Current.UiOpacity = e.NewValue / 100.0;
-        SettingsService.NotifyChanged();
-    }
-
     private void Reset_Click(object s, RoutedEventArgs e)
     {
         if (MessageBox.Show(this, "Сбросить все настройки к значениям по умолчанию?", "AURA",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        {
+            SystemControlService.SetAutoStart(false);
             SettingsService.Reset();
+        }
     }
 
     // ---------- Клавиши ----------

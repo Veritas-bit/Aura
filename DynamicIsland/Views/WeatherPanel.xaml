@@ -1,45 +1,92 @@
 <UserControl x:Class="DynamicIsland.Views.WeatherPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf">
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="2.2*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="1.25*"/>
         </Grid.RowDefinitions>
 
-        <!-- Текущая погода -->
-        <Border Margin="2,0,2,8" Background="{DynamicResource BgCardBrush}" CornerRadius="16"
-                BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1" Padding="16,12">
+        <Border Margin="2,0,2,10" Background="{DynamicResource BgCardBrush}" CornerRadius="18"
+                BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1" Padding="16">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Path x:Name="WeatherIcon" Style="{StaticResource VecIcon}" Width="46" Height="46"
-                          Data="{StaticResource ic_cloud_sun}" Fill="{DynamicResource AccentBrush}"/>
-                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="WeatherTemp" Text="—°" FontSize="26" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="WeatherCity" Text="" FontSize="12" Margin="8,0,0,3"
-                                       Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Bottom"/>
-                        </StackPanel>
-                        <TextBlock x:Name="WeatherDesc" Text="Загрузка прогноза…" FontSize="12"
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="0.9*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="WeatherCity" Text="Погода рядом с вами" FontSize="13"
                                    Foreground="{DynamicResource TextSecBrush}"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,0,0">
+                            <Path x:Name="WeatherIcon" Style="{StaticResource VecIcon}" Width="48" Height="48"
+                                  Data="{StaticResource ic_cloud_sun}" Fill="{DynamicResource AccentBrush}"
+                                  VerticalAlignment="Center"/>
+                            <TextBlock x:Name="WeatherTemp" Text="—°" FontSize="66" FontWeight="Light"
+                                       LineHeight="72" Margin="12,0,0,0"/>
+                        </StackPanel>
+                        <TextBlock x:Name="WeatherDesc" Text="Загрузка прогноза…" FontSize="14"
+                                   Foreground="{DynamicResource TextPriBrush}" Margin="4,2,0,0"/>
+                        <TextBlock x:Name="WeatherRange" Text="Макс. —°  ·  Мин. —°"
+                                   FontSize="12" Foreground="{DynamicResource TextSecBrush}" Margin="4,4,0,0"/>
                     </StackPanel>
-                </StackPanel>
-
-                <!-- Почасовой прогноз -->
-                <StackPanel x:Name="WeatherHours" Grid.Column="1" Orientation="Horizontal"
-                            HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <Grid x:Name="WeatherVisual" Grid.Column="1" Width="280" Height="180"
+                          HorizontalAlignment="Right" VerticalAlignment="Center" IsHitTestVisible="False">
+                        <Canvas x:Name="WeatherScene"/>
+                        <wv2:WebView2 x:Name="RemoteWeatherAnimation" Visibility="Collapsed"/>
+                    </Grid>
+                </Grid>
+                <UniformGrid Grid.Row="1" Columns="4" Margin="0,10,0,0">
+                    <Border Background="{DynamicResource BgDeepBrush}" CornerRadius="12" Margin="3" Padding="10,8">
+                        <StackPanel><TextBlock Text="ВЛАЖНОСТЬ" FontSize="9" Foreground="{DynamicResource TextDimBrush}"/>
+                            <TextBlock x:Name="HumidityValue" Text="—" FontSize="13" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource BgDeepBrush}" CornerRadius="12" Margin="3" Padding="10,8">
+                        <StackPanel><TextBlock Text="ВЕТЕР" FontSize="9" Foreground="{DynamicResource TextDimBrush}"/>
+                            <TextBlock x:Name="WindValue" Text="—" FontSize="13" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource BgDeepBrush}" CornerRadius="12" Margin="3" Padding="10,8">
+                        <StackPanel><TextBlock Text="ДАВЛЕНИЕ" FontSize="9" Foreground="{DynamicResource TextDimBrush}"/>
+                            <TextBlock x:Name="PressureValue" Text="—" FontSize="13" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource BgDeepBrush}" CornerRadius="12" Margin="3" Padding="10,8">
+                        <StackPanel><TextBlock Text="УФ-ИНДЕКС" FontSize="9" Foreground="{DynamicResource TextDimBrush}"/>
+                            <TextBlock x:Name="UvValue" Text="—" FontSize="13" FontWeight="SemiBold" Margin="0,3,0,0"/></StackPanel>
+                    </Border>
+                </UniformGrid>
             </Grid>
         </Border>
 
-        <!-- Прогноз на неделю -->
-        <TextBlock Grid.Row="1" Text="На неделю" FontSize="14" FontWeight="SemiBold" Margin="4,2,0,6"/>
-        <UniformGrid x:Name="WeatherDaily" Grid.Row="2" Columns="7" Rows="1"
-                     Height="118" VerticalAlignment="Top"/>
+        <Border Grid.Row="1" Margin="2,0,2,10" Background="{DynamicResource BgCardBrush}" CornerRadius="16"
+                BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1" Padding="12,9">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="ПО ЧАСАМ" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecBrush}" Margin="2,0,0,8"/>
+                <UniformGrid x:Name="WeatherHours" Grid.Row="1" Columns="8"/>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Margin="2,0,2,0" Background="{DynamicResource BgCardBrush}" CornerRadius="16"
+                BorderBrush="{DynamicResource BorderSoftBrush}" BorderThickness="1" Padding="12,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="НА 7 ДНЕЙ" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecBrush}" Margin="2,0,0,8"/>
+                <UniformGrid x:Name="WeatherDaily" Grid.Row="1" Columns="7" Rows="1"/>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

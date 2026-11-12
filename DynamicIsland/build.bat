@@ -1,24 +1,26 @@
 @echo off
-rem ============================================
-rem  AURA - сборка под Windows
-rem  Требуется .NET SDK 10: https://dot.net
-rem ============================================
 setlocal
+pushd "%~dp0"
 set "DOTNET=C:\Program Files\dotnet\dotnet.exe"
 if not exist "%DOTNET%" set "DOTNET=dotnet"
 
-echo [1/2] Сборка (Release)...
-"%DOTNET%" build -c Release || goto :err
+echo [1/2] Building Release...
+"%DOTNET%" build -c Release
+if errorlevel 1 goto :err
 
-echo [2/2] Публикация одиночного EXE (win-x64, автономный)...
+echo [2/2] Publishing self-contained Windows x64 executable...
 "%DOTNET%" publish -c Release -r win-x64 --self-contained true ^
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ^
-  -o publish || goto :err
+  -p:DebugType=None -p:DebugSymbols=false ^
+  -o publish
+if errorlevel 1 goto :err
 
 echo.
-echo Готово! Исполняемый файл: publish\AURA.exe
-goto :eof
+echo Done: publish\AURA.exe
+popd
+exit /b 0
 
 :err
-echo ОШИБКА сборки. Проверьте, что установлен .NET SDK 10.
+echo Build failed. Install the .NET 10 SDK and retry.
+popd
 exit /b 1

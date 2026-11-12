@@ -1,157 +1,61 @@
-# AURA — лаунчер-компаньон для Windows
+# AURA 0.0.1
 
-«Живой» островок в стиле Dynamic Island / macOS вверху экрана: анимированный
-компаньон **AURA** (аниме-глаза с ресницами, бровями и бликами), часы, батарея,
-погода, мониторинг системы и разворачивающаяся панель-галерея. Воздушный
-дизайн в глубоком чёрном (или светлые темы) с мягкой тенью в цвет компаньона.
+AURA is a compact Windows desktop dashboard inspired by Dynamic Island. The
+companion character is temporarily removed while a future 3D version is being
+designed. The current interface uses a strict black-or-white background,
+high-contrast text, and three configurable accent colors.
 
-![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)
-![dotnet](https://img.shields.io/badge/.NET-10-512BD4)
-![version](https://img.shields.io/badge/version-1.6.1-FF8FB8)
+## Requirements
 
-## Быстрый старт
+- Windows 10 or 11
+- .NET 10 SDK to build from source
+- Microsoft Edge WebView2 Runtime for CDN weather animations; the built-in
+  animated scene remains available without it
 
-Требуется **.NET SDK 10** ([скачать](https://dot.net/download)).
+## Run from source
 
-```bat
-rem вариант 1 — просто собрать и запустить
-dotnet run -c Release
-
-rem вариант 2 — собрать одиночный автономный EXE
-build.bat
-rem результат: publish\AURA.exe (~160 МБ, self-contained)
+```powershell
+dotnet run --project DynamicIsland.csproj -c Release
 ```
 
-Единственная NuGet-зависимость — `System.Management` (для яркости дисплея).
-Иконки — векторные **Phosphor Icons Fill** (лицензия MIT, стиль близок
-к SF Symbols regular filled), перекрашиваются кодом.
+For a self-contained Windows x64 executable, run `build.bat` from this folder.
+The output is written to `publish\AURA.exe`.
 
-## Использование
+## Features
 
-- **Навести курсор на островок** — развернуть панель; **убрать курсор** — свернуть.
-- **Потянуть островок вниз** — «резиновое» растяжение и раскрытие.
-- **Смахивание влево/вправо** по развёрнутой панели — листание вкладок.
-- **Клик / Ctrl+Shift+Пробел** — развернуть/свернуть (горячая клавиша меняется в настройках).
-- **ПКМ по островку** — меню (развернуть / настройки / выход). **Esc** — свернуть.
-- **Иконка в трее** — ЛКМ развернуть/свернуть, ПКМ — тема, статус-бар, выход.
-- **Шестерёнка в навбаре** — отдельное окно настроек (закрывается крестиком или Esc).
+- Compact top-edge island or notch with a 40 px baseline height, staged
+  expansion, hover, drag, and global hotkey controls; track width is capped at
+  three times the standard island width
+- Clock, battery, CPU/RAM/GPU status, and fullscreen game mode
+- Home tools below a reserved future 3D-companion stage: notes, alarm,
+  calculator, countdown, screenshots, clipboard, and Explorer shortcuts
+- Player synced through Windows Media Session with selectable active sources;
+  supports Apple Music, Spotify, and browser players (including YouTube and
+  Yandex Music) when they publish a Windows media session. Seeking and transport
+  controls depend on the capabilities each player exposes. Includes album art,
+  position-aware seeking, playback controls, and system volume; select among
+  active media sources and choose from three collapsed layouts with title/artist,
+  cover art, and a live system-audio
+  spectrum. Audio is analyzed in memory and is not recorded or stored.
+- Optional compact weather icon and temperature in the collapsed island/notch
+- Live weather conditions and forecast with animated Meteocons SVGs from the
+  CDN (local animated fallback when offline), plus a categorized launcher with
+  drag-and-drop shortcuts and OpenAI-compatible chat
+- Windows quick controls grouped into three 6-item sections, plus brightness,
+  volume, and power controls
+- Deep-black and pure-white themes with three editable accent colors, plus appearance, behavior,
+  status, hotkey, AI, module, and update settings
 
-## Возможности
+## App data
 
-### Свёрнутый вид (настраивается)
-- **Островок** — плавающая «пилюля» по центру верхнего края (базовый размер
-  200×50), либо **вырез-шторка**, прилегающая к краю экрана без отступов,
-  с плавными «плечиками» у верхних углов (переключается в настройках).
-- **Компаньон AURA** по центру — аниме-глаза на PNG-атласе из 8 поз
-  (референс — аниме-кадр с выразительным глазом; позы взгляда дорисованы
-  графической моделью): ресницы, намёк на брови, блики. Радужка перекрашивается
-  сдвигом тона под выбранный акцент. Следят за курсором мыши, моргают
-  (открыт → полуприкрыт → закрыт, иногда — двойное), засыпают при бездействии,
-  а просыпаясь — несколько мгновений «ищут» указатель взглядом по экрану
-  и фокусируются на нём; курсор на островке — счастливый щур.
-- Цифровые **часы** слева (секунды — опция), **батарея** и **статус-бар**
-  CPU / RAM / GPU единым блоком справа (батарея видна всегда при наличии АКБ;
-  зеленеет при зарядке; каждый элемент отключается по отдельности).
-- Раскрытие/сворачивание — одна анимация прогресса по **гладкой кривой
-  Безье** (как `cubic-bezier` в iOS): окно фиксированного размера, анимируется
-  только фигура тела. Плавный разгон и мягкая посадка без перелёта; прерывание
-  на середине реверсирует анимацию от текущей точки без скачков. Контент
-  проявляется фазами: свёрнутый вид гаснет сразу, развёрнутый — после ~55 %.
+Settings, notes, crash logs, and tray-icon cache are stored in
+`%APPDATA%\AURA`.
 
-### Игровой режим
-Когда игра развёрнута на весь экран, островок сам превращается в **тонкий
-вырез** (30 px) у края, а статус-бар показывает **температуру CPU/GPU**
-(ACPI-термозоны / nvidia-smi), **ping** и **потери пакетов** до 1.1.1.1.
-После выхода из игры возвращается обычный вид. Отключается в настройках.
+## Third-party credits
 
-### Развёрнутый вид — 6 вкладок
-Навбар — компактные векторные иконки; активная вкладка разворачивается
-в пилюлю с подписью, а подсвечивает её **единая аэро-плитка**, плавно
-переезжающая и растягивающаяся к выбранной вкладке.
-
-1. **Главная** — запись экрана (Win+Alt+R), скриншот, заметки (автосохранение),
-   будильник, калькулятор, таймер, буфер обмена, проводник.
-2. **Плеер** — обложка-персонаж (глаза Ауры на акцентном фоне): 2/3 ширины —
-   обложка, трек, сикбар, транспорт и громкость по строкам; 1/3 справа —
-   плейлист (mp3, flac, wav, m4a, mp4…), shuffle/repeat.
-3. **Погода** — Open-Meteo: текущая, «ощущается как», ветер, прогноз
-   на 5 часов и на неделю; локация — геолокация Windows или по IP.
-4. **Лаунчер** — пользовательские приложения с иконками и категориями.
-5. **ИИ-чат** — любой OpenAI-совместимый API (base URL, ключ, модель).
-6. **Система** — крупные плитки в стиле macOS Control Center:
-   Wi-Fi и Bluetooth (настоящие переключатели через WinRT Radio API), VPN,
-   тёмная/светлая тема Windows, плитка батареи; у активной плитки иконка
-   подсвечивается акцентным цветом, у выключенной — гаснет; кнопка «шестерёнка»
-   на плитке открывает соответствующую страницу Параметров Windows.
-   Ползунки громкости и яркости; мелкие плитки: блокировка, сон, перезагрузка,
-   выключение, выход из сеанса, диспетчер задач.
-
-Внутренний бокс панели — с тематичным оттенком акцентного цвета и отступом снизу.
-
-### Окно настроек (отдельное, с боковым меню)
-- **Персонаж** — цвет глаз (палитра + hex) и свечение-тень по краям.
-- **Темы** — цветовые темы компаньона, адаптированные из MeetClouding:
-  Классика, **Системная** (подхватывает акцентный цвет Windows — панель задач,
-  переключатели, рамки окон — и обновляется при его смене), **Утренняя** и
-  **Дневная** (светлые, на белом фоне), Вечерняя, Ночная и **Авто**
-  (переключает темы по времени суток: 5–9 / 9–17 / 17–21 / 21–5).
-  Ручной выбор цвета переключает тему в «Своя».
-- **Общее** — вид островка/шторки, секунды на часах, погода на главной,
-  поверх окон, сворачивание при потере фокуса, автозапуск, непрозрачность, сброс.
-- **Статус-бар** — включение, элементы CPU/RAM/GPU, игровой режим.
-- **Клавиши** — глобальная горячая клавиша раскрытия, единым списком.
-- **ИИ** — параметры OpenAI-совместимого API для чата.
-- **Модули (Widget Store)** — витрина будущих дополнений с отметками «Хочу!».
-- **Обновления** — версия, авто-проверка, «Что нового».
-
-Изменения сохраняются сразу, окно закрывается крестиком или по Esc.
-
-## Технические детали
-
-- **WPF, .NET 10**, `net10.0-windows10.0.26100.0` (нужен для WinRT Radio API).
-- Мониторинг — через **PDH с английскими именами счётчиков**: работает на любой
-  локали Windows. GPU — сумма 3D-движков (`\GPU Engine(*engtype_3D)\Utilization Percentage`).
-  Температура CPU — WMI `MSAcpi_ThermalZoneTemperature`, GPU — `nvidia-smi`
-  (если установлен). Ping/потери — ICMP до 1.1.1.1 со скользящим окном из 20 проб.
-- Погода — **Open-Meteo** (без ключа), локация — WinRT `Geolocator`
-  (координаты округляются до 0.01°), запасной вариант — ip-api.com.
-- Трей — `Shell_NotifyIcon` без зависимостей от WinForms; иконка рисуется
-  в цвет компаньона и кешируется в `%APPDATA%\AURA\`.
-- Громкость — Core Audio COM (`IAudioEndpointVolume`), без сторонних библиотек.
-- Яркость — WMI `WmiMonitorBrightness` (на внешних мониторах без DDC/CI
-  ползунок будет отключён).
-- Настройки, плейлист, ярлыки и заметки хранятся в `%APPDATA%\AURA\`
-  (один раз мигрируют из `%APPDATA%\DynamicIsland\`).
-- Анимация окна — окно всегда фиксированного размера и полностью прозрачное
-  (клики вне тела проходят насквозь); анимируется единое свойство `Progress`
-  по кривой Безье (`CubicBezierEase`), фигура тела и видимость контента
-  пересчитываются на каждом кадре. Наведение отслеживается опросом позиции
-  курсора (WPF-события на layered-окне нестабильны).
-- **Сторож геометрии**: окно откатывает любые посторонние попытки изменить
-  его размер/позицию (перехват `WM_WINDOWPOSCHANGING` + контроль отклонений
-  свойств), поэтому сторонние оконные утилиты не могут его деформировать.
-
-## Структура
-
-```
-DynamicIsland/
-├── App.xaml(.cs)            — палитра (тёмная/светлая), стили, конвертеры
-├── CubicBezierEase.cs       — easing по кубической кривой Безье (как в CSS)
-├── MainWindow.xaml(.cs)     — островок/шторка, анимации, навбар с аэро-плиткой,
-│                              жесты, игровой режим, хоткей, сторож геометрии
-├── Controls/AtlasEyesControl — компаньон AURA (атлас 8 поз, слежение, моргание)
-├── Assets/aura-eyes-atlas.png — атлас глаз 4×2 (реф + дорисованные позы)
-├── Resources/Icons.xaml     — векторные иконки Phosphor Fill (PathGeometry)
-├── Services/
-│   ├── SettingsService      — настройки (JSON) + миграция данных
-│   ├── ThemeService         — темы оформления + акцент Windows (UISettings)
-│   ├── SystemMonitorService — CPU/RAM/GPU + температуры + батарея + ping
-│   ├── WeatherService       — погода (Open-Meteo + геолокация)
-│   ├── TrayService          — иконка и меню в трее (Shell_NotifyIcon)
-│   ├── SystemControlService — громкость, яркость, радио, тема, питание
-│   └── IconHelper           — иконки .exe через SHGetFileInfo
-├── Views/                   — 6 вкладок (Home, Player, Weather, Launcher,
-│   │                          AiChat, Control) + WidgetStore
-│   └── SettingsWindow       — отдельное окно настроек с сайдбаром
-└── build.bat                — сборка одиночного AURA.exe
-```
+Weather animations are provided at runtime by Meteocons, created by Bas Milius,
+under the MIT License. Copyright (c) 2020-present Bas Milius. The icons are
+loaded from `bmcdn.nl`; AURA does not bundle their SVG files. See the
+[Meteocons license](https://github.com/basmilius/weather-icons/blob/main/LICENSE).
+If the WebView2 Runtime or network is unavailable, AURA uses its built-in
+animated weather scene instead.

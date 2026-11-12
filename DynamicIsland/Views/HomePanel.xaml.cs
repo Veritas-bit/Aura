@@ -128,7 +128,7 @@ public partial class HomePanel : UserControl
         if (!int.TryParse(TimerMinutesBox.Text, out int min) || min <= 0) min = 5;
         _timerLeft = TimeSpan.FromMinutes(min);
         _timerRunning = true;
-        TimerDisplay.Text = _timerLeft.ToString(@"mm\:ss");
+        TimerDisplay.Text = FormatCountdown(_timerLeft);
         _countdown.Start();
     }
 
@@ -142,7 +142,7 @@ public partial class HomePanel : UserControl
     {
         if (!_timerRunning) return;
         _timerLeft = _timerLeft.Subtract(TimeSpan.FromSeconds(1));
-        TimerDisplay.Text = _timerLeft.ToString(@"mm\:ss");
+        TimerDisplay.Text = FormatCountdown(_timerLeft);
         if (_timerLeft <= TimeSpan.Zero)
         {
             _timerRunning = false;
@@ -151,6 +151,14 @@ public partial class HomePanel : UserControl
             System.Media.SystemSounds.Beep.Play();
             if (Window.GetWindow(this) is MainWindow mw) mw.Expand("home");
         }
+    }
+
+    private static string FormatCountdown(TimeSpan remaining)
+    {
+        int hours = (int)Math.Floor(Math.Max(0, remaining.TotalHours));
+        return hours > 0
+            ? $"{hours:00}:{remaining.Minutes:00}:{remaining.Seconds:00}"
+            : remaining.ToString(@"mm\:ss");
     }
 
     // ---------- Симуляция горячих клавиш ----------

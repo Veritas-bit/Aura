@@ -9,14 +9,16 @@
     <AssemblyName>AURA</AssemblyName>
     <RootNamespace>DynamicIsland</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.6.1</Version>
-    <Product>AURA — островок-компаньон для Windows</Product>
-    <Description>Лаунчер-компаньон AURA в стиле Dynamic Island / macOS для Windows</Description>
+    <Version>0.0.1</Version>
+    <Product>AURA — лаунчер для Windows</Product>
+    <Description>Элегантная панель инструментов в стиле Dynamic Island для Windows</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- WMI для яркости дисплея -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <PackageReference Include="System.Management" Version="9.0.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
   </ItemGroup>
 
 </Project>

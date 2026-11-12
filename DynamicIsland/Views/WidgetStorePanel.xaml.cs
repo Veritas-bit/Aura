@@ -44,7 +44,7 @@ public partial class WidgetStorePanel : UserControl
 
         var badge = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
+            Background = (Brush)FindResource("OverlayFaintBrush"),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(7, 2, 7, 2),
             HorizontalAlignment = HorizontalAlignment.Left,

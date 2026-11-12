@@ -21,8 +21,12 @@ public partial class App : Application
         }
 
         SettingsService.Load();
-        ApplyAccent(SettingsService.Current.EyeColor);
-        SettingsService.Changed += () => ApplyAccent(SettingsService.Current.EyeColor);
+        ApplyAccentColors(SettingsService.Current.EyeColor,
+            SettingsService.Current.SecondaryAccentColor,
+            SettingsService.Current.TertiaryAccentColor);
+        SettingsService.Changed += () => ApplyAccentColors(SettingsService.Current.EyeColor,
+            SettingsService.Current.SecondaryAccentColor,
+            SettingsService.Current.TertiaryAccentColor);
         ThemeService.Init();
         WeatherService.Init();
 
@@ -44,25 +48,57 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
-    /// <summary>Обновляет акцентный цвет (цвет глаз / свечения) во всём приложении.</summary>
+    /// <summary>Обновляет акцентный цвет приложения.</summary>
     public static void ApplyAccent(string hex)
+    {
+        var settings = SettingsService.Current;
+        ApplyAccentColors(hex, settings.SecondaryAccentColor, settings.TertiaryAccentColor);
+    }
+
+    public static void ApplyAccentColors(string primaryHex, string secondaryHex, string tertiaryHex)
     {
         try
         {
-            var color = (Color)ColorConverter.ConvertFromString(hex);
-            var res = Current.Resources;
-            // Кисти из XAML заморожены — заменяем их новыми (DynamicResource обновится сам)
-            res["AccentColor"] = color;
-            res["AccentBrush"] = new SolidColorBrush(color);
-            res["AccentSoftBrush"] = new SolidColorBrush(Color.FromArgb(0x40, color.R, color.G, color.B));
-            // тематичный оттенок внутреннего бокса — полупрозрачный акцент поверх фона
-            res["BgPanelTintBrush"] = new SolidColorBrush(Color.FromArgb(0x16, color.R, color.G, color.B));
+            ApplyAccentColors(
+                (Color)ColorConverter.ConvertFromString(primaryHex),
+                (Color)ColorConverter.ConvertFromString(secondaryHex),
+                (Color)ColorConverter.ConvertFromString(tertiaryHex));
         }
-        catch { /* некорректный hex — игнорируем */ }
+        catch (FormatException) { }
     }
 
-    /// <summary>Переключает палитру приложения: глубокий чёрный ⇄ воздушный светлый.
-    /// Все потребители используют DynamicResource, поэтому обновление мгновенное.</summary>
+    public static void ApplyAccentColors(Color primary, Color secondary, Color tertiary)
+    {
+        var resources = Current.Resources;
+        resources["AccentColor"] = primary;
+        resources["AccentSecondaryColor"] = secondary;
+        resources["AccentTertiaryColor"] = tertiary;
+        resources["AccentBrush"] = new SolidColorBrush(primary);
+        resources["AccentOnBrush"] = new SolidColorBrush(GetContrastingTextColor(primary));
+        resources["AccentSecondaryBrush"] = new SolidColorBrush(secondary);
+        resources["AccentTertiaryBrush"] = new SolidColorBrush(tertiary);
+        resources["GreenBrush"] = new SolidColorBrush(tertiary);
+        resources["AccentSoftBrush"] = new SolidColorBrush(
+            Color.FromArgb(0x30, primary.R, primary.G, primary.B));
+    }
+
+    private static Color GetContrastingTextColor(Color background)
+    {
+        static double Linearize(byte channel)
+        {
+            double value = channel / 255.0;
+            return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
+        double luminance = 0.2126 * Linearize(background.R) +
+                           0.7152 * Linearize(background.G) +
+                           0.0722 * Linearize(background.B);
+        double blackContrast = (luminance + 0.05) / 0.05;
+        double whiteContrast = 1.05 / (luminance + 0.05);
+        return blackContrast >= whiteContrast ? Colors.Black : Colors.White;
+    }
+
+    /// <summary>Переключает весь интерфейс между контрастной чёрной и белой палитрами.</summary>
     public static void ApplyPalette(bool light)
     {
         var res = Current.Resources;
@@ -71,41 +107,43 @@ public partial class App : Application
 
         if (light)
         {
-            Set("BgDeepBrush", "#F5F6F9");
-            Set("BgPanelBrush", "#ECEEF3");
-            Set("BgCardBrush", "#FFFFFF");
-            Set("BgCardHoverBrush", "#F0F1F5");
+            Set("BgDeepBrush", "#FFFFFF");
+            Set("BgPanelBrush", "#FFFFFF");
+            Set("BgCardBrush", "#FFF7F7F7");
+            Set("BgCardHoverBrush", "#FFEAEAEA");
             Set("BgInputBrush", "#FFFFFF");
-            Set("BorderSoftBrush", "#1A000000");
-            Set("TextPriBrush", "#1B1B21");
-            Set("TextSecBrush", "#5A5A64");
-            Set("TextDimBrush", "#8F8F99");
-            Set("OverlayBrush", "#14000000");
-            Set("OverlayFaintBrush", "#0A000000");
-            Set("BgPopupBrush", "#FAFFFFFF");
-            Set("BgWindowBrush", "#F2F5F6F9");
-            Set("BgSidebarBrush", "#B0E9EBF0");
-            Set("ScrollThumbBrush", "#1F000000");
-            Set("EyeHighlightBrush", "#FFFFFF");
+            Set("BorderSoftBrush", "#FF222222");
+            Set("TextPriBrush", "#FF000000");
+            Set("TextSecBrush", "#FF383838");
+            Set("TextDimBrush", "#FF5C5C5C");
+            Set("OverlayBrush", "#FFE2E2E2");
+            Set("OverlayFaintBrush", "#FFF1F1F1");
+            Set("BgPopupBrush", "#FFFFFFFF");
+            Set("BgWindowBrush", "#FFFFFFFF");
+            Set("BgSidebarBrush", "#FFF5F5F5");
+            Set("ScrollThumbBrush", "#FF707070");
+            Set("EyeHighlightBrush", "#000000");
+            Set("ControlThumbBrush", "#FF000000");
         }
         else
         {
-            Set("BgDeepBrush", "#000000");
-            Set("BgPanelBrush", "#070707");
-            Set("BgCardBrush", "#0E0E0E");
-            Set("BgCardHoverBrush", "#161616");
-            Set("BgInputBrush", "#0A0A0A");
-            Set("BorderSoftBrush", "#1FFFFFFF");
-            Set("TextPriBrush", "#F5F5F7");
-            Set("TextSecBrush", "#9A9AA5");
-            Set("TextDimBrush", "#5C5C66");
-            Set("OverlayBrush", "#2AFFFFFF");
-            Set("OverlayFaintBrush", "#14FFFFFF");
-            Set("BgPopupBrush", "#F214141C");
-            Set("BgWindowBrush", "#F2000000");
-            Set("BgSidebarBrush", "#B0070707");
-            Set("ScrollThumbBrush", "#1FFFFFFF");
+            Set("BgDeepBrush", "#FF000000");
+            Set("BgPanelBrush", "#FF000000");
+            Set("BgCardBrush", "#FF101010");
+            Set("BgCardHoverBrush", "#FF1A1A1A");
+            Set("BgInputBrush", "#FF080808");
+            Set("BorderSoftBrush", "#FF383838");
+            Set("TextPriBrush", "#FFFFFFFF");
+            Set("TextSecBrush", "#FFD0D0D0");
+            Set("TextDimBrush", "#FF9A9A9A");
+            Set("OverlayBrush", "#FF282828");
+            Set("OverlayFaintBrush", "#FF181818");
+            Set("BgPopupBrush", "#FF080808");
+            Set("BgWindowBrush", "#FF000000");
+            Set("BgSidebarBrush", "#FF080808");
+            Set("ScrollThumbBrush", "#FF666666");
             Set("EyeHighlightBrush", "#000000");
+            Set("ControlThumbBrush", "#FFFFFFFF");
         }
     }
 }

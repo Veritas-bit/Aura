@@ -10,7 +10,7 @@ namespace DynamicIsland.Services;
 /// <summary>
 /// Иконка приложения в системном трее через Shell_NotifyIcon.
 /// Меню: тема (подменю), статус-бар (вкл/выкл), выход.
-/// Иконка — чёрный круг с глазками-пилюлями Ауры, рисуется WPF и кешируется в %APPDATA%\AURA.
+/// Иконка — минималистичный знак AURA, рисуется WPF и кешируется в %APPDATA%\AURA.
 /// </summary>
 public sealed class TrayService : IDisposable
 {
@@ -38,7 +38,7 @@ public sealed class TrayService : IDisposable
 
     // ---------- Иконка ----------
 
-    /// <summary>Перерисовать иконку под цвет компаньона (кешируется по цвету).</summary>
+    /// <summary>Перерисовать иконку под цвет темы (кешируется по цвету).</summary>
     public void UpdateIcon(Color accent)
     {
         string key = $"#{accent.R:X2}{accent.G:X2}{accent.B:X2}";
@@ -70,43 +70,42 @@ public sealed class TrayService : IDisposable
         Shell_NotifyIcon(message, ref data);
     }
 
-    /// <summary>Рисует чёрный круг с глазками-пилюлями и ресницами, сохраняет .ico, грузит HICON.</summary>
+    /// <summary>Рисует монограмму AURA, сохраняет .ico и загружает HICON.</summary>
     private static IntPtr CreateIcon(Color accent)
     {
         try
         {
             const int size = 64;
-            var brush = new SolidColorBrush(accent);
-
-            var root = new Grid { Width = size, Height = size };
-            root.Children.Add(new System.Windows.Shapes.Ellipse
+            var root = new Border
             {
-                Width = size, Height = size, Fill = Brushes.Black
+                Width = size,
+                Height = size,
+                CornerRadius = new CornerRadius(18),
+                Background = new SolidColorBrush(Color.FromRgb(0x18, 0x19, 0x21)),
+                Child = new Grid()
+            };
+            var content = (Grid)root.Child;
+            content.Children.Add(new TextBlock
+            {
+                Text = "A",
+                FontFamily = new FontFamily("Segoe UI"),
+                FontSize = 42,
+                FontWeight = FontWeights.Light,
+                Foreground = new SolidColorBrush(accent),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -3, 0, 0)
             });
-            // два глазка-пилюли
-            foreach (var x in new[] { 13.0, 35.0 })
+            content.Children.Add(new Border
             {
-                root.Children.Add(new Border
-                {
-                    Width = 16, Height = 26, CornerRadius = new CornerRadius(8),
-                    Background = brush,
-                    Margin = new Thickness(x, 22, 0, 0),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top
-                });
-                // ресницы
-                var lash = new System.Windows.Shapes.Path
-                {
-                    Data = Geometry.Parse("M2.5,5 L0.8,1.5 M8,4 L8,0 M13.5,5 L15.2,1.5"),
-                    Stroke = brush, StrokeThickness = 2,
-                    StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-                    Margin = new Thickness(x, 14, 0, 0),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top,
-                    Width = 16, Height = 8, Stretch = Stretch.Fill
-                };
-                root.Children.Add(lash);
-            }
+                Width = 18,
+                Height = 2,
+                CornerRadius = new CornerRadius(1),
+                Background = new SolidColorBrush(accent),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
 
             root.Measure(new Size(size, size));
             root.Arrange(new Rect(0, 0, size, size));

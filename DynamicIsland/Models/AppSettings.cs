@@ -16,12 +16,22 @@ public class StreamAction
 
 public class AppSettings
 {
+    public static int NormalizeTrackDisplayMode(int value) => value switch
+    {
+        <= 1 => 1,
+        4 => 2,
+        >= 5 => 3,
+        _ => value
+    };
+
     // Внешний вид
-    public string EyeColor { get; set; } = "#7C4DFF";
+    public string EyeColor { get; set; } = "#A78BFA";
+    public string SecondaryAccentColor { get; set; } = "#D946EF";
+    public string TertiaryAccentColor { get; set; } = "#22D3EE";
+    public bool LightBackground { get; set; }
     public string Theme { get; set; } = "custom"; // custom | classic | system | morning | day | evening | night | auto
     public string CollapsedStyle { get; set; } = "Island"; // Island | Notch
     public bool GlowEnabled { get; set; } = true;
-    public double UiOpacity { get; set; } = 0.96;
 
     // Содержимое свёрнутого вида
     public bool ShowClock { get; set; } = true;
@@ -31,12 +41,14 @@ public class AppSettings
     public bool StatCpu { get; set; } = true;
     public bool StatRam { get; set; } = true;
     public bool StatGpu { get; set; } = true;
+    public int CollapsedTrackDisplayMode { get; set; } = 1;
 
     // Игровой режим: в полноэкранных играх — тонкий вырез с температурами, пингом и потерями
     public bool GameMode { get; set; } = true;
 
     // Погода на главной панели
     public bool ShowWeather { get; set; } = true;
+    public bool ShowWeatherInIsland { get; set; }
 
     // Поведение
     public bool Topmost { get; set; } = true;
@@ -53,10 +65,6 @@ public class AppSettings
     // Лаунчер
     public List<AppShortcut> Apps { get; set; } = new();
     public List<string> AppCategories { get; set; } = new() { "Общее", "Работа", "Игры", "Медиа" };
-
-    // Плеер
-    public List<string> Playlist { get; set; } = new();
-    public double PlayerVolume { get; set; } = 0.7;
 
     // Панель стрима — иконки "ic:ключ" рисуются вектором, остальное — как текст (эмодзи)
     public List<StreamAction> StreamActions { get; set; } = new()

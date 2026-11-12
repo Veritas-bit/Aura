@@ -12,6 +12,11 @@ namespace DynamicIsland.Views;
 /// <summary>Лаунчер пользовательских приложений с категориями.</summary>
 public partial class LauncherPanel : UserControl
 {
+    private static readonly HashSet<string> ShortcutExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".lnk", ".bat", ".cmd"
+    };
+
     private string _currentCategory = "Все";
 
     public LauncherPanel()
@@ -150,6 +155,43 @@ public partial class LauncherPanel : UserControl
             Path.GetFileNameWithoutExtension(dlg.FileName));
         if (string.IsNullOrWhiteSpace(name)) return;
 
+        AddShortcut(dlg.FileName, name);
+    }
+
+    private void Apps_DragOver(object s, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetData(DataFormats.FileDrop) is string[] files &&
+                    files.Any(IsSupportedShortcut)
+            ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Apps_Drop(object s, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
+
+        bool changed = false;
+        foreach (var file in files.Where(IsSupportedShortcut))
+            changed |= AddShortcut(file, Path.GetFileNameWithoutExtension(file), refresh: false);
+
+        if (changed)
+        {
+            SettingsService.Save();
+            Refresh();
+        }
+        e.Handled = true;
+    }
+
+    private static bool IsSupportedShortcut(string path) =>
+        File.Exists(path) && ShortcutExtensions.Contains(Path.GetExtension(path));
+
+    private bool AddShortcut(string path, string name, bool refresh = true)
+    {
+        if (!IsSupportedShortcut(path)) return false;
+        if (SettingsService.Current.Apps.Any(app =>
+                string.Equals(app.Path, path, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
         var category = _currentCategory == "Все" ? "Общее" : _currentCategory;
         if (!SettingsService.Current.AppCategories.Contains(category))
             SettingsService.Current.AppCategories.Add(category);
@@ -157,10 +199,15 @@ public partial class LauncherPanel : UserControl
         SettingsService.Current.Apps.Add(new AppShortcut
         {
             Name = name,
-            Path = dlg.FileName,
+            Path = path,
             Category = category
         });
-        SettingsService.Save();
-        Refresh();
+
+        if (refresh)
+        {
+            SettingsService.Save();
+            Refresh();
+        }
+        return true;
     }
 }

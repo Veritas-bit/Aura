@@ -12,10 +12,18 @@ public class WeatherInfo
     public double Temp;
     public double FeelsLike;
     public double Wind;         // м/с
+    public int Humidity;
+    public int CloudCover;
+    public double Pressure;
+    public double Precipitation;
+    public double UvIndex;
+    public int WindDirection;
     public int Code;            // WMO weather code
+    public bool IsDay;
     public string Error = "";
-    public List<(string Time, double Temp, int Code)> Hours = new();
-    public List<(string Day, double Min, double Max, int Code)> Daily = new();
+    public List<(string Time, double Temp, int Code, int PrecipitationProbability)> Hours = new();
+    public List<(string Day, double Min, double Max, int Code, string Sunrise, string Sunset,
+        double Precipitation, double Wind)> Daily = new();
 }
 
 /// <summary>
@@ -36,7 +44,8 @@ public static class WeatherService
     {
         SettingsService.Changed += () =>
         {
-            if (SettingsService.Current.ShowWeather) _ = RefreshAsync();
+            if (SettingsService.Current.ShowWeather || SettingsService.Current.ShowWeatherInIsland)
+                _ = RefreshAsync();
         };
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(15) };
         _timer.Tick += (_, _) => _ = RefreshAsync();
@@ -46,7 +55,7 @@ public static class WeatherService
 
     public static async Task RefreshAsync()
     {
-        if (_busy || !SettingsService.Current.ShowWeather) return;
+        if (_busy || (!SettingsService.Current.ShowWeather && !SettingsService.Current.ShowWeatherInIsland)) return;
         _busy = true;
         try
         {
@@ -63,9 +72,11 @@ public static class WeatherService
             string lon = loc.Lon.ToString("0.00", CultureInfo.InvariantCulture);
             var url = "https://api.open-meteo.com/v1/forecast" +
                       $"?latitude={lat}&longitude={lon}" +
-                      "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m" +
-                      "&hourly=temperature_2m,weather_code&forecast_hours=5" +
-                      "&daily=temperature_2m_max,temperature_2m_min,weather_code&forecast_days=7" +
+                      "&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m," +
+                      "wind_direction_10m,relative_humidity_2m,cloud_cover,pressure_msl,precipitation,uv_index" +
+                      "&hourly=temperature_2m,weather_code,precipitation_probability&forecast_hours=8" +
+                      "&daily=temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset," +
+                      "precipitation_sum,wind_speed_10m_max&forecast_days=7" +
                       "&wind_speed_unit=ms&timezone=auto";
 
             using var doc = JsonDocument.Parse(await Http.GetStringAsync(url));
@@ -73,7 +84,14 @@ public static class WeatherService
             Info.Temp = cur.GetProperty("temperature_2m").GetDouble();
             Info.FeelsLike = cur.GetProperty("apparent_temperature").GetDouble();
             Info.Wind = cur.GetProperty("wind_speed_10m").GetDouble();
+            Info.WindDirection = cur.GetProperty("wind_direction_10m").GetInt32();
+            Info.Humidity = cur.GetProperty("relative_humidity_2m").GetInt32();
+            Info.CloudCover = cur.GetProperty("cloud_cover").GetInt32();
+            Info.Pressure = cur.GetProperty("pressure_msl").GetDouble();
+            Info.Precipitation = cur.GetProperty("precipitation").GetDouble();
+            Info.UvIndex = cur.GetProperty("uv_index").GetDouble();
             Info.Code = cur.GetProperty("weather_code").GetInt32();
+            Info.IsDay = cur.GetProperty("is_day").GetInt32() == 1;
             Info.City = loc.City;
 
             Info.Hours.Clear();
@@ -81,9 +99,10 @@ public static class WeatherService
             var times = hourly.GetProperty("time").EnumerateArray().ToArray();
             var temps = hourly.GetProperty("temperature_2m").EnumerateArray().ToArray();
             var codes = hourly.GetProperty("weather_code").EnumerateArray().ToArray();
-            for (int i = 0; i < times.Length && i < 5; i++)
+            var precipitation = hourly.GetProperty("precipitation_probability").EnumerateArray().ToArray();
+            for (int i = 0; i < times.Length && i < 8; i++)
                 Info.Hours.Add((times[i].GetString()?[11..16] ?? "—",
-                    temps[i].GetDouble(), codes[i].GetInt32()));
+                    temps[i].GetDouble(), codes[i].GetInt32(), precipitation[i].GetInt32()));
 
             Info.Daily.Clear();
             var daily = doc.RootElement.GetProperty("daily");
@@ -91,13 +110,20 @@ public static class WeatherService
             var maxs = daily.GetProperty("temperature_2m_max").EnumerateArray().ToArray();
             var mins = daily.GetProperty("temperature_2m_min").EnumerateArray().ToArray();
             var dcodes = daily.GetProperty("weather_code").EnumerateArray().ToArray();
+            var sunrises = daily.GetProperty("sunrise").EnumerateArray().ToArray();
+            var sunsets = daily.GetProperty("sunset").EnumerateArray().ToArray();
+            var precipitationTotals = daily.GetProperty("precipitation_sum").EnumerateArray().ToArray();
+            var maxWinds = daily.GetProperty("wind_speed_10m_max").EnumerateArray().ToArray();
             var ru = new CultureInfo("ru-RU");
             for (int i = 0; i < days.Length && i < 7; i++)
             {
                 string day = DateTime.TryParse(days[i].GetString(), out var dt)
                     ? (i == 0 ? "Сегодня" : dt.ToString("ddd", ru))
                     : "—";
-                Info.Daily.Add((day, mins[i].GetDouble(), maxs[i].GetDouble(), dcodes[i].GetInt32()));
+                string sunrise = sunrises[i].GetString() is { Length: >= 16 } rise ? rise[11..16] : "—";
+                string sunset = sunsets[i].GetString() is { Length: >= 16 } set ? set[11..16] : "—";
+                Info.Daily.Add((day, mins[i].GetDouble(), maxs[i].GetDouble(), dcodes[i].GetInt32(),
+                    sunrise, sunset, precipitationTotals[i].GetDouble(), maxWinds[i].GetDouble()));
             }
 
             Info.Available = true;

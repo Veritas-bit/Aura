@@ -4,8 +4,7 @@ using System.Windows.Threading;
 
 namespace DynamicIsland.Services;
 
-/// <summary>Описание темы: три цвета (основной/вторичный/акцент) в HSL, как в исходной палитре.
-/// Light=true — светлая тема на белом фоне.</summary>
+/// <summary>Описание темы: три акцентных цвета в HSL и режим чёрного/белого фона.</summary>
 public record ThemeInfo(string Key, string Name, string Hint,
     (double H, double S, double L)? Primary,
     (double H, double S, double L)? Secondary,
@@ -13,16 +12,13 @@ public record ThemeInfo(string Key, string Name, string Hint,
     bool Light = false);
 
 /// <summary>
-/// Темы, адаптированные из репозитория MeetClouding (src/app/globals.css):
-/// Утренняя / Дневная / Вечерняя / Ночная + Авто (по времени суток) и Системная,
-/// которая подхватывает акцентный цвет Windows (панель задач, переключатели, бордеры окон).
-/// Тема задаёт цвет компаньона — из него уже строятся акцентные кисти всего приложения.
+/// Темы оформления с тремя контрастными акцентами и однотонным чёрным/белым фоном.
 /// </summary>
 public static class ThemeService
 {
     public static readonly ThemeInfo[] Themes =
     {
-        new("classic", "Классика",  "Фирменный фиолетовый островка",
+        new("classic", "Классика",  "Фирменный фиолетовый акцент",
             (256, 100, 65), (300, 81, 59), (204, 100, 50)),
         new("system",  "Системная", "Акцентный цвет Windows",
             null, null, null),
@@ -42,19 +38,29 @@ public static class ThemeService
     private static Windows.UI.ViewManagement.UISettings? _uiSettings;
     private static bool _applying;
 
-    /// <summary>Светлая ли сейчас тема (для фона островка и палитры приложения).</summary>
+    /// <summary>Светлая ли сейчас тема.</summary>
     public static bool IsLight { get; private set; }
 
-    /// <summary>Базовый цвет фона окна: глубокий чёрный или воздушный светлый.</summary>
+    /// <summary>Базовый цвет фона островка.</summary>
     public static Color BaseColor => IsLight
-        ? Color.FromRgb(0xF5, 0xF6, 0xF9)
-        : Color.FromRgb(0x00, 0x00, 0x00);
+        ? Colors.White
+        : Colors.Black;
+
+    public static (Color Primary, Color Secondary, Color Tertiary)? GetThemePalette(string key)
+    {
+        bool light = key switch
+        {
+            "auto" => ByHourInfo()?.Light ?? false,
+            _ => Themes.FirstOrDefault(theme => theme.Key == key)?.Light ?? false
+        };
+        return ResolvePreset(key, light);
+    }
 
     public static void Init()
     {
         SettingsService.Changed += Apply;
 
-        // Авто-тема: проверка каждые 5 минут (как в MeetClouding)
+        // Авто-тема обновляется по времени суток.
         _autoTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
         _autoTimer.Tick += (_, _) => Apply();
         _autoTimer.Start();
@@ -71,15 +77,35 @@ public static class ThemeService
         Apply();
     }
 
-    /// <summary>Применяет текущую тему: пересчитывает цвет и пишет его в EyeColor,
-    /// откуда уже обновляются акцентные кисти, глаза и тень.</summary>
+    /// <summary>Применяет выбранную тему и обновляет её акцентный цвет.</summary>
     public static void Apply()
     {
         if (_applying) return;
         var s = SettingsService.Current;
         if (s.Theme == "custom")
         {
-            ApplyLight(false); // «Своя» — всегда глубокий чёрный
+            ApplyLight(s.LightBackground);
+            var customPrimary = EnsureAccentContrast(ParseColor(s.EyeColor, "#A78BFA"), s.LightBackground);
+            var customSecondary = EnsureAccentContrast(ParseColor(s.SecondaryAccentColor, "#D946EF"), s.LightBackground);
+            var customTertiary = EnsureAccentContrast(ParseColor(s.TertiaryAccentColor, "#22D3EE"), s.LightBackground);
+            var customPrimaryHex = ToHex(customPrimary);
+            var customSecondaryHex = ToHex(customSecondary);
+            var customTertiaryHex = ToHex(customTertiary);
+            if (!string.Equals(s.EyeColor, customPrimaryHex, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(s.SecondaryAccentColor, customSecondaryHex, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(s.TertiaryAccentColor, customTertiaryHex, StringComparison.OrdinalIgnoreCase))
+            {
+                _applying = true;
+                try
+                {
+                    s.EyeColor = customPrimaryHex;
+                    s.SecondaryAccentColor = customSecondaryHex;
+                    s.TertiaryAccentColor = customTertiaryHex;
+                    SettingsService.NotifyChanged();
+                }
+                finally { _applying = false; }
+            }
+            ApplyAccents(customPrimary, customSecondary, customTertiary);
             return;
         }
 
@@ -89,24 +115,31 @@ public static class ThemeService
             "auto" => ByHourInfo()?.Light ?? false,
             _ => Themes.FirstOrDefault(t => t.Key == s.Theme)?.Light ?? false,
         };
+        var colors = ResolvePreset(s.Theme, light);
+        if (colors is null) return;
+        var (primary, secondary, tertiary) = colors.Value;
+        string primaryHex = ToHex(primary);
+        string secondaryHex = ToHex(secondary);
+        string tertiaryHex = ToHex(tertiary);
         ApplyLight(light);
-
-        Color? color = s.Theme switch
-        {
-            "system" => GetWindowsAccent(),
-            "auto" => ByHour(),
-            _ => ResolvePreset(s.Theme),
-        };
-        if (color is not { } c) return;
-
-        string hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-        if (!string.Equals(s.EyeColor, hex, StringComparison.OrdinalIgnoreCase))
+        bool changed = s.LightBackground != light ||
+                       !string.Equals(s.EyeColor, primaryHex, StringComparison.OrdinalIgnoreCase) ||
+                       !string.Equals(s.SecondaryAccentColor, secondaryHex, StringComparison.OrdinalIgnoreCase) ||
+                       !string.Equals(s.TertiaryAccentColor, tertiaryHex, StringComparison.OrdinalIgnoreCase);
+        if (changed)
         {
             _applying = true;
-            s.EyeColor = hex;
-            SettingsService.NotifyChanged();
-            _applying = false;
+            try
+            {
+                s.LightBackground = light;
+                s.EyeColor = primaryHex;
+                s.SecondaryAccentColor = secondaryHex;
+                s.TertiaryAccentColor = tertiaryHex;
+                SettingsService.NotifyChanged();
+            }
+            finally { _applying = false; }
         }
+        ApplyAccents(primary, secondary, tertiary);
     }
 
     private static void ApplyLight(bool light)
@@ -116,10 +149,100 @@ public static class ThemeService
         Application.Current?.Dispatcher.Invoke(() => App.ApplyPalette(light));
     }
 
-    private static Color? ResolvePreset(string key)
+    private static (Color Primary, Color Secondary, Color Tertiary)? ResolvePreset(string key, bool light)
     {
+        if (key == "auto" && ByHourInfo() is { } timedTheme &&
+            timedTheme.Primary is { } timedPrimary &&
+            timedTheme.Secondary is { } timedSecondary &&
+            timedTheme.Accent is { } timedTertiary)
+            return EnsurePaletteContrast(Hsl(timedPrimary), Hsl(timedSecondary), Hsl(timedTertiary), light);
+
+        if (key == "system")
+        {
+            var primary = GetWindowsAccent();
+            var (h, saturation, lightness) = ToHsl(primary);
+            return EnsurePaletteContrast(primary,
+                Hsl(h + 42, Math.Max(62, saturation), Math.Clamp(lightness, 42, 68)),
+                Hsl(h + 190, Math.Max(62, saturation), Math.Clamp(lightness, 42, 68)), light);
+        }
+
         var t = Themes.FirstOrDefault(t => t.Key == key);
-        return t?.Primary is { } p ? Hsl(p) : null;
+        return t?.Primary is { } p && t.Secondary is { } secondary && t.Accent is { } accent
+            ? EnsurePaletteContrast(Hsl(p), Hsl(secondary), Hsl(accent), light)
+            : null;
+    }
+
+    private static (Color Primary, Color Secondary, Color Tertiary) EnsurePaletteContrast(
+        Color primary, Color secondary, Color tertiary, bool light) =>
+        (EnsureAccentContrast(primary, light),
+         EnsureAccentContrast(secondary, light),
+         EnsureAccentContrast(tertiary, light));
+
+    private static Color EnsureAccentContrast(Color color, bool lightBackground)
+    {
+        double backgroundLuminance = lightBackground ? 1 : 0;
+        if (ContrastRatio(RelativeLuminance(color), backgroundLuminance) >= 4.5)
+            return color;
+
+        var (h, saturation, lightness) = ToHsl(color);
+        for (int step = 1; step <= 100; step++)
+        {
+            double adjustedLightness = lightBackground
+                ? Math.Max(0, lightness - step)
+                : Math.Min(100, lightness + step);
+            var candidate = Hsl(h, saturation, adjustedLightness);
+            if (ContrastRatio(RelativeLuminance(candidate), backgroundLuminance) >= 4.5)
+                return candidate;
+        }
+
+        return lightBackground ? Colors.Black : Colors.White;
+    }
+
+    private static double ContrastRatio(double first, double second)
+    {
+        double lighter = Math.Max(first, second);
+        double darker = Math.Min(first, second);
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        static double Linearize(byte channel)
+        {
+            double value = channel / 255.0;
+            return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Linearize(color.R) +
+               0.7152 * Linearize(color.G) +
+               0.0722 * Linearize(color.B);
+    }
+
+    private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static Color ParseColor(string value, string fallback)
+    {
+        try { return (Color)ColorConverter.ConvertFromString(value); }
+        catch { return (Color)ColorConverter.ConvertFromString(fallback); }
+    }
+
+    private static void ApplyAccents(Color primary, Color secondary, Color tertiary) =>
+        Application.Current?.Dispatcher.Invoke(() =>
+            App.ApplyAccentColors(primary, secondary, tertiary));
+
+    private static (double H, double S, double L) ToHsl(Color color)
+    {
+        double r = color.R / 255.0, g = color.G / 255.0, b = color.B / 255.0;
+        double max = Math.Max(r, Math.Max(g, b));
+        double min = Math.Min(r, Math.Min(g, b));
+        double delta = max - min;
+        double h = delta == 0 ? 0
+            : max == r ? 60 * (((g - b) / delta) % 6)
+            : max == g ? 60 * ((b - r) / delta + 2)
+            : 60 * ((r - g) / delta + 4);
+        double l = (max + min) / 2;
+        double s = delta == 0 ? 0 : delta / (1 - Math.Abs(2 * l - 1));
+        return (((h + 360) % 360), s * 100, l * 100);
     }
 
     /// <summary>Авто-тема: 5–9 Утренняя, 9–17 Дневная, 17–21 Вечерняя, 21–5 Ночная.</summary>
@@ -132,9 +255,6 @@ public static class ThemeService
                    : "night";
         return Themes.FirstOrDefault(t => t.Key == key);
     }
-
-    private static Color ByHour() =>
-        ByHourInfo()?.Primary is { } p ? Hsl(p) : GetWindowsAccent();
 
     /// <summary>Акцентный цвет Windows (тот, что красит панель задач, переключатели и рамки).</summary>
     public static Color GetWindowsAccent()

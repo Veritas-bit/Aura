@@ -9,12 +9,12 @@ using Windows.Devices.Radios;
 
 namespace DynamicIsland.Views;
 
-/// <summary>Функциональная панель: крупные плитки-переключатели, громкость/яркость, питание.</summary>
+/// <summary>Быстрые системные параметры, сгруппированные по трем категориям.</summary>
 public partial class ControlPanel : UserControl
 {
     private bool _suppressVolume;
     private bool _suppressBrightness;
-    private bool _wifiOn, _btOn, _vpnOn, _darkTheme = true;
+    private bool _wifiOn, _btOn, _darkTheme = true;
     private readonly DispatcherTimer _batteryTimer;
 
     public ControlPanel()
@@ -82,9 +82,9 @@ public partial class ControlPanel : UserControl
     {
         chip.Background = on
             ? (Brush)Application.Current.FindResource("AccentBrush")
-            : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF));
+            : (Brush)Application.Current.FindResource("OverlayFaintBrush");
         icon.Fill = on
-            ? Brushes.White
+            ? (Brush)Application.Current.FindResource("TextPriBrush")
             : (Brush)Application.Current.FindResource("TextDimBrush");
         status.Text = on ? onText : offText;
     }
@@ -117,9 +117,13 @@ public partial class ControlPanel : UserControl
 
     private void Vpn_Click(object s, RoutedEventArgs e)
     {
-        _vpnOn = !_vpnOn;
-        SetTile(VpnChip, VpnIcon, VpnStatus, _vpnOn, "Включён", "Выключен");
         SystemControlService.OpenSettings("ms-settings:network-vpn");
+    }
+
+    private void SettingsShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string page } && !string.IsNullOrWhiteSpace(page))
+            SystemControlService.OpenSettings(page);
     }
 
     private void Theme_Click(object s, RoutedEventArgs e)
@@ -129,10 +133,6 @@ public partial class ControlPanel : UserControl
         SystemControlService.SetLightTheme(!_darkTheme);
     }
 
-    private void WifiSettings_Click(object s, RoutedEventArgs e) { e.Handled = true; SystemControlService.OpenSettings("ms-settings:network-wifi"); }
-    private void BtSettings_Click(object s, RoutedEventArgs e) { e.Handled = true; SystemControlService.OpenSettings("ms-settings:bluetooth"); }
-    private void VpnSettings_Click(object s, RoutedEventArgs e) { e.Handled = true; SystemControlService.OpenSettings("ms-settings:network-vpn"); }
-    private void ThemeSettings_Click(object s, RoutedEventArgs e) { e.Handled = true; SystemControlService.OpenSettings("ms-settings:colors"); }
     private void Battery_Click(object s, RoutedEventArgs e) => SystemControlService.OpenSettings("ms-settings:batterysaver");
 
     // ---------- Батарея ----------

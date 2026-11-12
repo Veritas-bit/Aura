@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,8 +9,10 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
-using DynamicIsland.Controls;
+using DynamicIsland.Models;
 using DynamicIsland.Services;
 using DynamicIsland.Views;
 
@@ -23,26 +26,36 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _hoverCollapseTimer;
     private readonly DispatcherTimer _hoverPoll;
     private readonly DispatcherTimer _gameModeTimer;
+    private readonly DispatcherTimer _equalizerTimer;
+    private readonly DispatcherTimer _marqueeTimer;
+    private readonly MediaSessionService _media = new();
+    private readonly AudioSpectrumService _audioSpectrum = new();
+    private readonly List<Rectangle> _equalizerBars = new();
     private readonly Dictionary<string, UserControl> _panels = new();
     private readonly Dictionary<string, (StackPanel Root, Border Fill, TextBlock Value, string Label)> _statItems = new();
+    private readonly TranslateTransform _panelTransition = new();
+    private int _panelTransitionVersion;
     private bool _expanded;
     private bool _animating;
     private bool _navGuard;
     private bool _gameMode;
-    private Point _lastCursor;
-    private DateTime _lastActivity = DateTime.Now;
+    private MediaSessionInfo _currentMedia = MediaSessionInfo.Empty;
+    private float[] _audioLevels = new float[48];
+    private double _marqueeOffset;
+    private string _displayedTrackId = "";
+    private byte[]? _displayedArtwork;
     private TrayService? _tray;
 
     // Геометрия свёрнутого вида
-    private const double CollapsedH = 50;          // высота островка/выреза
-    private const double GameH = 30;               // толщина выреза в игровом режиме
-    private const double BodyGap = 14;             // единый отступ: от края тела и между элементами
-    private const double CollapsedBaseW = 172;     // оценка до первой раскладки: часы + компаньон + батарея
-    private const double StatItemW = 46;           // ширина одного элемента статус-бара с отступом
+    private const double CollapsedH = 40;
+    private const double GameH = 30;
+    private const double BodyGap = 14;
+    private const double CollapsedBaseW = 172;
+    private const double StatItemW = 64;           // ширина одного элемента статус-бара с отступом
     private const double NotchShoulder = 14;       // ширина «плечика» выреза
     private const double IslandMarginH = 8;        // боковые поля фона островка
     private const double IslandMarginV = 20;       // суммарные вертикальные поля (8+12)
-    private const double ExpandedContentW = 764;
+    private const double ExpandedContentWBase = 764;
 
     private static readonly string[] TabOrder =
         { "home", "player", "weather", "apps", "ai", "control" };
@@ -50,8 +63,23 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        PanelHost.RenderTransform = _panelTransition;
 
+        TrackTextViewport.SizeChanged += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+        Width = WindowW();
+        Height = WindowH();
         BuildStatsStrip();
+        BuildTrackEqualizer();
+        _media.Changed += OnMediaChanged;
+        _audioSpectrum.LevelsUpdated += OnAudioLevelsUpdated;
+        _audioSpectrum.ErrorOccurred += OnAudioSpectrumError;
+        _ = _media.StartAsync();
+        _equalizerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(90) };
+        _equalizerTimer.Tick += (_, _) => AnimateTrackEqualizer();
+        _equalizerTimer.Start();
+        _marqueeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+        _marqueeTimer.Tick += (_, _) => AdvanceTrackMarquee();
 
         // Исходная форма тела и позиция окна до первого кадра
         Top = TopForMode();
@@ -83,20 +111,21 @@ public partial class MainWindow : Window
         _gameModeTimer.Start();
 
         _monitor.Updated += OnStats;
+        WeatherService.Updated += OnWeatherUpdated;
         SettingsService.Changed += ApplySettings;
 
         // после первой раскладки — пересчитать тело по замеренной ширине контента
-        Loaded += (_, _) => ApplyShape();
+        Loaded += (_, _) =>
+        {
+            UpdateCollapsedWidth(animate: false);
+            ApplyShape();
+        };
 
         SizeChanged += (_, _) =>
         {
             if (!_animating) RecenterHorizontal();
         };
         ExpandedView.SizeChanged += (_, _) => { if (!_animating) MoveNavPill(animate: false); };
-
-        // Жест смахивания по развёрнутой панели — листание вкладок
-        PreviewMouseLeftButtonDown += Window_PreviewDown;
-        PreviewMouseLeftButtonUp += Window_PreviewUp;
 
         // Сторож геометрии: на этой машине внешняя утилита периодически пытается
         // пересчитать размер окна (видны посторонние SetWindowPos/WM_SIZE). Пока идёт
@@ -134,6 +163,14 @@ public partial class MainWindow : Window
         {
             _tray?.Dispose();
             _monitor.Dispose();
+            _equalizerTimer.Stop();
+            _marqueeTimer.Stop();
+            WeatherService.Updated -= OnWeatherUpdated;
+            _audioSpectrum.LevelsUpdated -= OnAudioLevelsUpdated;
+            _audioSpectrum.ErrorOccurred -= OnAudioSpectrumError;
+            _audioSpectrum.Dispose();
+            _media.Changed -= OnMediaChanged;
+            _media.Dispose();
         };
     }
 
@@ -142,7 +179,7 @@ public partial class MainWindow : Window
     private void RecenterHorizontal()
     {
         var wa = SystemParameters.WorkArea;
-        Left = wa.Left + (wa.Width - Width) / 2;
+        Left = wa.Left + wa.Width * 0.5 - Width * 0.5;
     }
 
     /// <summary>Откат посторонних изменений размера к целевой геометрии (см. сторож выше).</summary>
@@ -165,14 +202,40 @@ public partial class MainWindow : Window
 
     private bool IsNotch => _gameMode || SettingsService.Current.CollapsedStyle == "Notch";
 
-    private double CollapsedHeight => _gameMode ? GameH : CollapsedH;
+    private bool ShowTrack => !_gameMode && _currentMedia.IsPlaying && _currentMedia.HasTrack;
+    private int TrackDisplayMode =>
+        AppSettings.NormalizeTrackDisplayMode(SettingsService.Current.CollapsedTrackDisplayMode);
+    private bool ShowTrackCover => ShowTrack && TrackDisplayMode >= 2;
+    private bool ShowTrackEqualizer => ShowTrack && TrackDisplayMode == 3;
+    private double UiScale
+    {
+        get
+        {
+            return Math.Clamp(Math.Min(SystemParameters.PrimaryScreenWidth / 1920.0,
+                SystemParameters.PrimaryScreenHeight / 1080.0), 0.65, 1.3);
+        }
+    }
+    private double CollapsedHeight => _gameMode
+        ? GameH * UiScale
+        : !ShowTrack ? CollapsedH * UiScale
+        : (ShowTrackCover ? 32 : 30) * UiScale + (ShowTrackEqualizer ? 8 * UiScale : 0);
+    private double CollapsedContentInset => ShowTrackCover
+        ? 0
+        : IsNotch ? (NotchShoulder + 8) * UiScale : BodyGap * UiScale;
+    private double ExpandedContentW => Math.Min(ExpandedContentWBase * UiScale, SystemParameters.WorkArea.Width * 0.84);
 
     /// <summary>Ширина содержимого: замер реального контента.
     /// До первой раскладки — оценка: базовые 172 плюс элементы статус-бара.</summary>
     private double CollapsedContentW()
     {
-        if (IsLoaded && CollapsedStack.DesiredSize.Width > 4)
-            return CollapsedStack.DesiredSize.Width;
+        if (CollapsedWidth > 4) return CollapsedWidth;
+
+        if (IsLoaded)
+        {
+            CollapsedStack.Measure(new Size(double.PositiveInfinity, CollapsedHeight));
+            if (CollapsedStack.DesiredSize.Width > 4)
+                return CollapsedStack.DesiredSize.Width;
+        }
 
         var s = SettingsService.Current;
         if (!s.ShowStats) return CollapsedBaseW;
@@ -185,22 +248,32 @@ public partial class MainWindow : Window
     private double ExpandedContentH()
     {
         var wa = SystemParameters.WorkArea;
-        return Math.Min(620, wa.Height - 80);
+        return Math.Min(620 * UiScale, wa.Height * 0.84);
     }
 
     // Окно ВСЕГДА фиксированного размера — анимируется фигура тела внутри него,
     // а не само окно. Благодаря этому пружина идёт в render-потоке без дёрганья.
-    private double WindowW() => ExpandedContentW + 2 * NotchShoulder + 16; // 808
-    private double WindowH() => ExpandedContentH() + IslandMarginV;        // 640 при 1080p
+    private double WindowW() => ExpandedContentW + (2 * NotchShoulder + 16) * UiScale;
+    private double WindowH() => ExpandedContentH() + IslandMarginV * UiScale;
 
     private double TopForMode() =>
-        SystemParameters.WorkArea.Top + (IsNotch ? 0 : 2);
+        SystemParameters.WorkArea.Top + (IsNotch ? 0 : 2 * UiScale);
 
     // ==================== Прогресс и форма тела ====================
 
     public static readonly DependencyProperty ProgressProperty = DependencyProperty.Register(
         nameof(Progress), typeof(double), typeof(MainWindow),
         new PropertyMetadata(0.0, (d, _) => ((MainWindow)d).ApplyShape()));
+
+    private static readonly DependencyProperty CollapsedWidthProperty = DependencyProperty.Register(
+        nameof(CollapsedWidth), typeof(double), typeof(MainWindow),
+        new PropertyMetadata(0.0, (d, _) => ((MainWindow)d).ApplyShape()));
+
+    private double CollapsedWidth
+    {
+        get => (double)GetValue(CollapsedWidthProperty);
+        set => SetValue(CollapsedWidthProperty, value);
+    }
 
     /// <summary>0 = свёрнутый островок, 1 = развёрнутая панель.</summary>
     public double Progress
@@ -210,6 +283,7 @@ public partial class MainWindow : Window
     }
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+    private static double SmoothStep(double value) => value * value * (3 - 2 * value);
 
     /// <summary>Пересчёт фигуры тела и видимости контента на каждом кадре прогресса.</summary>
     private void ApplyShape()
@@ -219,57 +293,82 @@ public partial class MainWindow : Window
         _animating = Math.Abs(p - (_expanded ? 1.0 : 0.0)) > 0.002;
 
         bool notch = IsNotch;
-        double margin = notch ? NotchShoulder : IslandMarginH;
+        double margin = (notch ? NotchShoulder : IslandMarginH) * UiScale;
         double contentW = CollapsedContentW();
         // свёрнутое тело обнимает контент ровно на BodyGap — отступы от края
         // равны отступам между элементами; margin здесь не участвует
-        double collapsedW = contentW + 2 * BodyGap;
+        double collapsedInset = CollapsedContentInset;
+        double collapsedW = Math.Max(200 * UiScale, contentW + 2 * collapsedInset);
         double collapsedH = CollapsedHeight;
         double expandedW = ExpandedContentW + 2 * margin;
         double expandedH = ExpandedContentH();
 
-        double w = Math.Max(1, Lerp(collapsedW, expandedW, p));
-        double h = Math.Max(1, Lerp(collapsedH, expandedH, p));
+        double widthProgress = SmoothStep(Math.Clamp((c - 0.14) / 0.86, 0, 1));
+        double heightProgress = SmoothStep(Math.Clamp((c - 0.16) / 0.84, 0, 1));
+        double w = Math.Max(1, Lerp(collapsedW, expandedW, widthProgress));
+        double h = Math.Max(1, Lerp(collapsedH, expandedH, heightProgress));
         double x = (Width - w) / 2;
-        double y = notch ? 0 : 8;
+        double y = notch ? 0 : 8 * UiScale;
 
         if (notch)
         {
-            double r = Lerp(_gameMode ? 11 : 15, 22, c);
-            Body.Data = NotchGeometry(w, h, r);
+            double r = Lerp(_gameMode ? 11 : 15, 22, c) * UiScale;
+            Body.Data = NotchGeometry(w, h, r, NotchShoulder * UiScale);
         }
         else
         {
-            double r = Lerp(collapsedH / 2, 24, c);
+            double r = Lerp(collapsedH / 2, 24 * UiScale, c);
             Body.Data = RoundedRect(w, h, Math.Min(r, h / 2));
         }
         Body.Margin = new Thickness(x, y, 0, 0);
         _bodyRect = new Rect(Left + x, Top + y, w, h);
 
-        // Содержимое исчезает с первого кадра анимации:
-        // при раскрытии свёрнутый вид гаснет мгновенно, развёрнутый проявляется
-        // после 55 % пути; при сворачивании — наоборот.
-        bool opening = _expanded;
-        CollapsedView.Margin = new Thickness(x + BodyGap, y, 0, 0);
+        CollapsedView.Margin = new Thickness(x + collapsedInset, y, 0, 0);
         CollapsedView.Width = Math.Max(1, contentW);
         CollapsedView.Height = collapsedH;
-        CollapsedView.Opacity = opening ? 0 : Math.Clamp((0.45 - c) / 0.45, 0, 1);
-        CollapsedView.IsHitTestVisible = !opening && c < 0.1;
+        if (ShowTrack)
+        {
+            var trackClip = Body.Data.Clone();
+            trackClip.Transform = new TranslateTransform(
+                Body.Margin.Left - CollapsedView.Margin.Left,
+                Body.Margin.Top - CollapsedView.Margin.Top);
+            CollapsedTrackView.Clip = trackClip;
 
-        ExpandedView.Margin = new Thickness(x + margin + 4, y + 2, 0, 0);
-        ExpandedView.Width = ExpandedContentW - 8;
-        ExpandedView.Height = expandedH - 2;
-        ExpandedView.Opacity = opening ? Math.Clamp((c - 0.55) / 0.45, 0, 1) : 0;
-        ExpandedView.IsHitTestVisible = opening && c > 0.9;
+            if (ShowTrackCover)
+            {
+                double coverWidth = contentW / 6;
+                double coverHeight = collapsedH;
+                TrackCoverFrame.Width = coverWidth;
+                TrackCoverFrame.Height = coverHeight;
+                TrackCoverFrame.Margin = new Thickness(0, 0, 8 * UiScale, 0);
+                TrackCoverFrame.Clip = new CombinedGeometry(
+                    GeometryCombineMode.Intersect,
+                    new RectangleGeometry(new Rect(0, 0, coverWidth, coverHeight)),
+                    trackClip.Clone());
+            }
+        }
+        else
+        {
+            CollapsedTrackView.Clip = null;
+        }
+        // Clear the old layout first, morph the surface, then reveal the new layout.
+        CollapsedView.Opacity = SmoothStep(Math.Clamp((0.16 - c) / 0.16, 0, 1));
+        CollapsedView.IsHitTestVisible = !_expanded && c < 0.1;
+
+        ExpandedView.Margin = new Thickness(x + margin + 4 * UiScale, y + 2 * UiScale, 0, 0);
+        ExpandedView.Width = ExpandedContentW - 8 * UiScale;
+        ExpandedView.Height = expandedH - 2 * UiScale;
+        ExpandedView.Opacity = SmoothStep(Math.Clamp((c - 0.82) / 0.16, 0, 1));
+        ExpandedView.IsHitTestVisible = _expanded && ExpandedView.Opacity > 0.95;
     }
 
     private static Geometry RoundedRect(double w, double h, double r) =>
         new RectangleGeometry(new Rect(0, 0, w, h), r, r);
 
     /// <summary>Фигура выреза: «плечики» — выпуклые дуги у верхнего края экрана.</summary>
-    private static Geometry NotchGeometry(double w, double h, double r)
+    private static Geometry NotchGeometry(double w, double h, double r, double shoulder)
     {
-        double s = NotchShoulder;
+        double s = shoulder;
         if (w < 2 * s + 2 * r || h < s + r)
             return RoundedRect(w, h, Math.Min(r, h / 2));
 
@@ -297,25 +396,28 @@ public partial class MainWindow : Window
         var s = SettingsService.Current;
         var accent = CurrentAccent();
 
-        EyesCollapsed.SetLineTheme(ThemeService.IsLight);
-        EyesCollapsed.SetEyeColor(accent);
-        EyesCollapsed.Scale = _gameMode ? 0.6 : 0.95;
         _tray?.UpdateIcon(accent);
 
-        // Тень снизу и по бокам в цвет компаньона (1–2 px смещение)
+        // Мягкая тень подчёркивает форму островка без лишнего свечения.
         if (Body.Effect is DropShadowEffect shadow)
         {
             shadow.Color = accent;
-            shadow.Opacity = s.GlowEnabled ? 0.55 : 0;
+            shadow.Opacity = s.GlowEnabled ? 0.35 : 0;
         }
 
-        // Фон в цвет темы (глубокий чёрный или воздушный светлый) с настраиваемой непрозрачностью
-        byte a = (byte)Math.Clamp(s.UiOpacity * 255, 0, 255);
+        // Поверхность остаётся полностью непрозрачной для строгого чёрно-белого контраста.
         var bc = ThemeService.BaseColor;
-        Body.Fill = new SolidColorBrush(Color.FromArgb(a, bc.R, bc.G, bc.B));
+        Body.Fill = new SolidColorBrush(bc);
+        UpdateEqualizerColors();
 
-        ClockSeconds.Visibility = s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
+        ClockText.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
+        ClockSeconds.Visibility = s.ShowClock && s.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
+        ClockDivider.Visibility = s.ShowClock ? Visibility.Visible : Visibility.Collapsed;
         BatteryPanel.Visibility = s.ShowBattery && _monitor.Stats.HasBattery ? Visibility.Visible : Visibility.Collapsed;
+        s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
+        UpdateTrackDisplay();
+        UpdateCollapsedWeather();
+        UpdateAudioAnalysis();
 
         bool game = _gameMode && s.ShowStats;
         SetStatVisible("cpu", s.ShowStats && s.StatCpu);
@@ -325,6 +427,8 @@ public partial class MainWindow : Window
         SetStatVisible("gput", game);
         SetStatVisible("ping", game);
         SetStatVisible("loss", game);
+        UpdateStatsPanelVisibility();
+        UpdateCollapsedWidth(animate: !_expanded && !_animating);
 
         Topmost = s.Topmost;
 
@@ -339,10 +443,110 @@ public partial class MainWindow : Window
         ApplyShape();
     }
 
+    private void UpdateCollapsedWidth(bool animate)
+    {
+        if (!IsLoaded) return;
+
+        CollapsedStack.Visibility = Visibility.Hidden;
+        CollapsedStack.Measure(new Size(double.PositiveInfinity, CollapsedH * UiScale));
+        double normalContentWidth = CollapsedStack.DesiredSize.Width;
+        CollapsedStack.Visibility = ShowTrack ? Visibility.Collapsed : Visibility.Visible;
+
+        double inset = CollapsedContentInset;
+        double minimumContentWidth = Math.Max(0, 200 * UiScale - inset * 2);
+        double target;
+        if (ShowTrack)
+        {
+            CollapsedTrackTitle.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double titleWidth = CollapsedTrackTitle.DesiredSize.Width;
+            bool hasCover = ShowTrackCover;
+            double standardBodyWidth = Math.Max(200 * UiScale, normalContentWidth + inset * 2);
+            double maxBodyWidth = Math.Min(standardBodyWidth * 3,
+                SystemParameters.WorkArea.Width * 0.84);
+            double maxContentWidth = Math.Max(minimumContentWidth, maxBodyWidth - inset * 2);
+            double naturalTrackWidth = hasCover
+                ? (titleWidth + 18 * UiScale) * 6 / 5
+                : titleWidth + 24 * UiScale;
+            target = Math.Clamp(naturalTrackWidth, minimumContentWidth, maxContentWidth);
+            CollapsedTrackView.Width = target;
+            double coverWidth = hasCover ? target / 6 : 0;
+            TrackCoverFrame.Width = coverWidth;
+        }
+        else
+        {
+            target = Math.Max(minimumContentWidth, normalContentWidth);
+        }
+
+        double current = CollapsedWidth > 4 ? CollapsedWidth : target;
+        if (!animate || Math.Abs(target - current) < 0.5)
+        {
+            BeginAnimation(CollapsedWidthProperty, null);
+            CollapsedWidth = target;
+            return;
+        }
+
+        var animation = new DoubleAnimation
+        {
+            From = current,
+            To = target,
+            Duration = TimeSpan.FromMilliseconds(280),
+            EasingFunction = new CubicBezierEase { X1 = 0.2, Y1 = 0.7, X2 = 0.2, Y2 = 1 },
+            FillBehavior = FillBehavior.HoldEnd
+        };
+        animation.Completed += (_, _) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+        BeginAnimation(CollapsedWidthProperty, animation);
+    }
+
+    private void OnWeatherUpdated() => Dispatcher.BeginInvoke(
+        DispatcherPriority.DataBind, new Action(() =>
+        {
+            UpdateCollapsedWeather();
+            if (!_currentMedia.IsPlaying || !_currentMedia.HasTrack)
+                UpdateCollapsedWidth(animate: !_expanded && !_animating);
+        }));
+
+    private void UpdateCollapsedWeather()
+    {
+        var weather = WeatherService.Info;
+        bool show = SettingsService.Current.ShowWeatherInIsland && weather.Available;
+        CollapsedWeatherPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show) return;
+        string icon = WeatherService.Describe(weather.Code).Icon;
+        if (TryFindResource(icon) is Geometry geometry)
+            CollapsedWeatherIcon.Data = geometry;
+        CollapsedWeatherText.Text = $"{Math.Round(weather.Temp):0}°";
+        CollapsedWeatherPanel.ToolTip = $"{weather.City}: {WeatherService.Describe(weather.Code).Text}";
+    }
+
+    private void UpdateAudioAnalysis()
+    {
+        if (ShowTrackEqualizer)
+        {
+            TrackEqualizer.ToolTip = null;
+            _audioSpectrum.Start();
+        }
+        else
+            _audioSpectrum.Stop();
+    }
+
+    private void OnAudioLevelsUpdated(float[] levels) => Dispatcher.BeginInvoke(
+        DispatcherPriority.Render, new Action(() => _audioLevels = levels));
+
+    private void OnAudioSpectrumError(string message) => Dispatcher.BeginInvoke(
+        DispatcherPriority.Normal, new Action(() => TrackEqualizer.ToolTip = message));
+
     private void SetStatVisible(string key, bool visible)
     {
         if (_statItems.TryGetValue(key, out var item))
             item.Root.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateStatsPanelVisibility()
+    {
+        StatsPanel.Visibility = BatteryPanel.Visibility == Visibility.Visible ||
+                                _statItems.Values.Any(item => item.Root.Visibility == Visibility.Visible)
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ==================== Статус-бар (батарея + метрики единым блоком) ====================
@@ -373,19 +577,23 @@ public partial class MainWindow : Window
         var barWrap = new Border
         {
             Width = 34, Height = 3, CornerRadius = new CornerRadius(1.5),
-            Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
             HorizontalAlignment = HorizontalAlignment.Center,
             Child = fill
         };
+        barWrap.SetResourceReference(Border.BackgroundProperty, "OverlayFaintBrush");
 
         var value = new TextBlock
         {
+            Width = 52,
             FontSize = 9, Text = $"{label} —",
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
             HorizontalAlignment = HorizontalAlignment.Center,
             Foreground = (Brush)FindResource("TextSecBrush")
         };
 
-        var root = new StackPanel { Margin = new Thickness(6, 0, 0, 0), Width = 40 };
+        var root = new StackPanel { Margin = new Thickness(6, 0, 0, 0), Width = 58 };
         root.Children.Add(value);
         root.Children.Add(barWrap);
 
@@ -426,9 +634,10 @@ public partial class MainWindow : Window
         if (_statItems.TryGetValue("gpu", out var gpuItem) &&
             (gpuItem.Root.Visibility == Visibility.Visible) != gpuVisible)
             gpuItem.Root.Visibility = gpuVisible ? Visibility.Visible : Visibility.Collapsed;
+        UpdateStatsPanelVisibility();
 
         // ширина тела могла измениться (появление/пропадание GPU, включение статистики)
-        if (!_expanded && !_animating) ApplyShape();
+        UpdateCollapsedWidth(animate: !_expanded && !_animating);
     }
 
     private void UpdateStat(string key, double pct)
@@ -453,23 +662,183 @@ public partial class MainWindow : Window
         ClockText.Text = now.ToString("HH:mm");
         ClockSeconds.Text = now.ToString(":ss");
 
-        // детект бездействия → глаза засыпают; движение → пробуждение с «поиском» курсора
-        GetCursorPos(out var pt);
-        var cursor = new Point(pt.X, pt.Y);
-        if (Math.Abs(cursor.X - _lastCursor.X) > 2 || Math.Abs(cursor.Y - _lastCursor.Y) > 2)
+    }
+
+    private void BuildTrackEqualizer()
+    {
+        for (int i = 0; i < 48; i++)
         {
-            _lastCursor = cursor;
-            if ((DateTime.Now - _lastActivity).TotalSeconds > 45)
+            var bar = new Rectangle
             {
-                EyesCollapsed.WakeUp();
-            }
-            _lastActivity = DateTime.Now;
+                Height = 2,
+                RadiusX = 1,
+                RadiusY = 1
+            };
+            _equalizerBars.Add(bar);
+            TrackEqualizer.Children.Add(bar);
         }
-        else if ((DateTime.Now - _lastActivity).TotalSeconds > 45
-                 && EyesCollapsed.CurrentEmotion != EyeEmotion.Sleepy)
+        UpdateEqualizerColors();
+    }
+
+    private void UpdateEqualizerColors()
+    {
+        Brush[] palette =
         {
-            EyesCollapsed.SetEmotion(EyeEmotion.Sleepy);
+            (Brush)FindResource("AccentBrush"),
+            (Brush)FindResource("AccentSecondaryBrush"),
+            (Brush)FindResource("AccentTertiaryBrush")
+        };
+        for (int i = 0; i < _equalizerBars.Count; i++)
+            _equalizerBars[i].Fill = palette[i % palette.Length];
+    }
+
+    private void AnimateTrackEqualizer()
+    {
+        if (!ShowTrackEqualizer || TrackEqualizer.ActualWidth <= 0)
+        {
+            TrackEqualizer.Visibility = Visibility.Collapsed;
+            return;
         }
+
+        TrackEqualizer.Visibility = Visibility.Visible;
+        double canvasWidth = TrackEqualizer.ActualWidth;
+        double canvasHeight = TrackEqualizer.ActualHeight;
+        if (canvasHeight <= 0) return;
+        double slotWidth = canvasWidth / _equalizerBars.Count;
+        for (int i = 0; i < _equalizerBars.Count; i++)
+        {
+            double height = Math.Clamp(_audioLevels[i] * canvasHeight, 1, canvasHeight);
+            var bar = _equalizerBars[i];
+            bar.Width = Math.Max(0, slotWidth - 1);
+            bar.Height = height;
+            Canvas.SetLeft(bar, i * slotWidth + 1);
+            Canvas.SetTop(bar, Math.Max(0, canvasHeight - bar.Height));
+        }
+    }
+
+    private void OnMediaChanged(MediaSessionInfo info)
+    {
+        bool trackChanged = !string.Equals(_displayedTrackId, info.TrackId, StringComparison.Ordinal);
+        bool artworkChanged = !ReferenceEquals(_displayedArtwork, info.Artwork);
+        bool wasShowingTrack = ShowTrack;
+        bool wasShowingCover = ShowTrackCover;
+        bool wasShowingEqualizer = ShowTrackEqualizer;
+        double previousHeight = CollapsedHeight;
+        _currentMedia = info;
+        if (trackChanged || artworkChanged || wasShowingTrack != ShowTrack)
+            UpdateTrackDisplay();
+
+        if (trackChanged || wasShowingTrack != ShowTrack || wasShowingCover != ShowTrackCover ||
+            wasShowingEqualizer != ShowTrackEqualizer || previousHeight != CollapsedHeight)
+            UpdateCollapsedWidth(animate: !_expanded && !_animating);
+        UpdateAudioAnalysis();
+    }
+
+    private void UpdateTrackDisplay()
+    {
+        bool showTrack = ShowTrack;
+        string title = _currentMedia.Title;
+        string artist = _currentMedia.Artist;
+        string trackText = string.IsNullOrWhiteSpace(artist) ? title : $"{title} — {artist}";
+
+        CollapsedStack.Visibility = showTrack ? Visibility.Collapsed : Visibility.Visible;
+        CollapsedTrackView.Visibility = showTrack ? Visibility.Visible : Visibility.Collapsed;
+        TrackCoverFrame.Visibility = ShowTrackCover ? Visibility.Visible : Visibility.Collapsed;
+        SetTrackLabel(CollapsedTrackTitle, showTrack ? title : "", artist);
+        SetTrackLabel(RepeatedTrackTitle, showTrack ? title : "", artist);
+        CollapsedTrackView.ToolTip = showTrack ? trackText : null;
+
+        if (!ReferenceEquals(_displayedArtwork, _currentMedia.Artwork))
+        {
+            _displayedArtwork = _currentMedia.Artwork;
+            CollapsedTrackCover.Source = CreateTrackArtwork(_displayedArtwork);
+        }
+        CollapsedTrackCover.Visibility = CollapsedTrackCover.Source is null
+            ? Visibility.Collapsed : Visibility.Visible;
+        TrackCoverFallback.Visibility = CollapsedTrackCover.Source is null
+            ? Visibility.Visible : Visibility.Collapsed;
+        _displayedTrackId = _currentMedia.TrackId;
+        TrackEqualizer.Visibility = ShowTrackEqualizer ? Visibility.Visible : Visibility.Collapsed;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(UpdateTrackMarquee));
+    }
+
+    private void SetTrackLabel(TextBlock block, string title, string artist)
+    {
+        block.Inlines.Clear();
+        if (string.IsNullOrWhiteSpace(title)) return;
+
+        block.Inlines.Add(new System.Windows.Documents.Run(title)
+        {
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("TextPriBrush")
+        });
+        if (!string.IsNullOrWhiteSpace(artist))
+        {
+            block.Inlines.Add(new System.Windows.Documents.Run("  —  ")
+            {
+                Foreground = (Brush)FindResource("AccentBrush")
+            });
+            block.Inlines.Add(new System.Windows.Documents.Run(artist)
+            {
+                FontWeight = FontWeights.Medium,
+                Foreground = (Brush)FindResource("TextSecBrush")
+            });
+        }
+    }
+
+    private static BitmapImage? CreateTrackArtwork(byte[]? bytes)
+    {
+        if (bytes is not { Length: > 0 }) return null;
+        var image = new BitmapImage();
+        using var stream = new MemoryStream(bytes);
+        image.BeginInit();
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.StreamSource = stream;
+        image.EndInit();
+        image.Freeze();
+        return image;
+    }
+
+    private void UpdateTrackMarquee()
+    {
+        if (!ShowTrack || !IsLoaded || TrackTextViewport.ActualWidth <= 0)
+        {
+            _marqueeTimer.Stop();
+            TrackTextTransform.X = 0;
+            return;
+        }
+
+        CollapsedTrackTitle.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double titleWidth = CollapsedTrackTitle.DesiredSize.Width;
+        if (titleWidth <= TrackTextViewport.ActualWidth + 1)
+        {
+            _marqueeTimer.Stop();
+            RepeatedTrackTitle.Visibility = Visibility.Collapsed;
+            TrackTextStrip.Width = titleWidth;
+            TrackTextTransform.X = 0;
+            return;
+        }
+
+        RepeatedTrackTitle.Visibility = Visibility.Visible;
+        TrackTextStrip.Width = titleWidth * 2 + 28 * UiScale;
+        _marqueeOffset = 0;
+        TrackTextTransform.X = 0;
+        _marqueeTimer.Start();
+    }
+
+    private void AdvanceTrackMarquee()
+    {
+        double titleWidth = CollapsedTrackTitle.ActualWidth;
+        if (!ShowTrack || titleWidth <= TrackTextViewport.ActualWidth)
+        {
+            UpdateTrackMarquee();
+            return;
+        }
+
+        _marqueeOffset += 0.9 * UiScale;
+        double loopLength = titleWidth + 28 * UiScale;
+        if (_marqueeOffset >= loopLength) _marqueeOffset = 0;
+        TrackTextTransform.X = -_marqueeOffset;
     }
 
     // ==================== Игровой режим ====================
@@ -531,23 +900,17 @@ public partial class MainWindow : Window
         AnimateProgress(0, opening: false);
     }
 
-    /// <summary>
-    /// Одна анимация прогресса по гладкой кривой Безье (как cubic-bezier в CSS).
-    /// Прерывание на середине разворачивает/сворачивает от текущего значения —
-    /// без скачков и блокировок.
-    /// </summary>
+    /// <summary>Медленное, плавное раскрытие/сворачивание без пружинного перелёта.</summary>
     private void AnimateProgress(double target, bool opening)
     {
         var animation = new DoubleAnimation
         {
             From = Progress,
             To = target,
-            Duration = TimeSpan.FromMilliseconds(opening ? 380 : 240),
-            // раскрытие — плавный разгон и мягкая посадка (iOS-подобная кривая);
-            // закрытие — равномерное ускорение вниз без перелёта
+            Duration = TimeSpan.FromMilliseconds(opening ? 380 : 340),
             EasingFunction = opening
-                ? new CubicBezierEase { X1 = 0.32, Y1 = 0.72, X2 = 0, Y2 = 1 }
-                : new CubicBezierEase { X1 = 0.55, Y1 = 0, X2 = 0.55, Y2 = 0.2 }
+                ? new CubicBezierEase { X1 = 0.18, Y1 = 0.62, X2 = 0.24, Y2 = 1 }
+                : new CubicBezierEase { X1 = 0.18, Y1 = 0.62, X2 = 0.24, Y2 = 1 }
         };
         BeginAnimation(ProgressProperty, animation);
     }
@@ -561,7 +924,7 @@ public partial class MainWindow : Window
             panel = key switch
             {
                 "home" => new HomePanel(),
-                "player" => new PlayerPanel(),
+                "player" => new PlayerPanel(_media),
                 "weather" => new WeatherPanel(),
                 "apps" => new LauncherPanel(),
                 "ai" => new AiChatPanel(),
@@ -570,7 +933,65 @@ public partial class MainWindow : Window
             };
             _panels[key] = panel;
         }
-        PanelHost.Content = panel;
+
+        var currentKey = CurrentPanelKey();
+        if (!ReferenceEquals(PanelHost.Content, panel))
+        {
+            int transitionVersion = ++_panelTransitionVersion;
+            int currentIndex = Array.IndexOf(TabOrder, currentKey);
+            int nextIndex = Array.IndexOf(TabOrder, key);
+            double direction = nextIndex >= currentIndex ? 1 : -1;
+            _panelTransition.BeginAnimation(TranslateTransform.XProperty, null);
+            PanelHost.BeginAnimation(UIElement.OpacityProperty, null);
+
+            if (PanelHost.Content is null)
+            {
+                PanelHost.Content = panel;
+                _panelTransition.X = 0;
+                PanelHost.Opacity = 1;
+            }
+            else
+            {
+                var exit = new DoubleAnimation(_panelTransition.X, -direction * 20,
+                    TimeSpan.FromMilliseconds(115))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                exit.Completed += (_, _) =>
+                {
+                    if (transitionVersion != _panelTransitionVersion) return;
+                    PanelHost.BeginAnimation(UIElement.OpacityProperty, null);
+                    _panelTransition.BeginAnimation(TranslateTransform.XProperty, null);
+                    PanelHost.Content = panel;
+                    _panelTransition.X = direction * 20;
+                    PanelHost.Opacity = 0;
+                    PanelHost.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(210))
+                        {
+                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                        });
+                    _panelTransition.BeginAnimation(TranslateTransform.XProperty,
+                        new DoubleAnimation(direction * 20, 0, TimeSpan.FromMilliseconds(230))
+                        {
+                            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                        });
+                };
+                _panelTransition.BeginAnimation(TranslateTransform.XProperty, exit);
+                PanelHost.BeginAnimation(UIElement.OpacityProperty,
+                    new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(115))
+                    {
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                    });
+            }
+        }
+        else
+        {
+            ++_panelTransitionVersion;
+            _panelTransition.BeginAnimation(TranslateTransform.XProperty, null);
+            PanelHost.BeginAnimation(UIElement.OpacityProperty, null);
+            _panelTransition.X = 0;
+            PanelHost.Opacity = 1;
+        }
 
         _navGuard = true;
         foreach (var t in new[] { NavHome, NavPlayer, NavWeather, NavApps, NavAi, NavControl })
@@ -636,13 +1057,6 @@ public partial class MainWindow : Window
         return "home";
     }
 
-    private void SwitchTab(int delta)
-    {
-        int i = Array.IndexOf(TabOrder, CurrentPanelKey());
-        int next = Math.Clamp(i + delta, 0, TabOrder.Length - 1);
-        if (next != i) ShowPanel(TabOrder[next]);
-    }
-
     // ==================== Мышь: наведение ====================
 
     // WPF MouseEnter/Leave на прозрачном layered-окне «флапает» при движении
@@ -668,82 +1082,6 @@ public partial class MainWindow : Window
             if (_expanded && IslandMenu.IsOpen != true && !_hoverCollapseTimer.IsEnabled)
                 _hoverCollapseTimer.Start();
         }
-    }
-
-    // ==================== Жесты ====================
-
-    private Point _pressStart;
-    private bool _pressing;        // тянем свёрнутый островок вниз
-    private bool _swipeTracking;   // жест смахивания по развёрнутой панели
-    private bool _swipeOnButton;
-
-    /// <summary>Потянуть островок вниз — «резиновое» растяжение, отпустить — раскрыть.</summary>
-    private void Island_Press(object sender, MouseButtonEventArgs e)
-    {
-        if (_expanded || _animating || _gameMode) return;
-        _pressing = true;
-        _pressStart = e.GetPosition(this);
-        CollapsedView.CaptureMouse();
-    }
-
-    private void Island_Drag(object sender, MouseEventArgs e)
-    {
-        if (!_pressing) return;
-        double dy = e.GetPosition(this).Y - _pressStart.Y;
-        // резиновое сопротивление: чем дальше, тем неохотнее
-        ContentHostMove.Y = dy > 0 ? Rubber(dy) : 0;
-    }
-
-    private void Island_Release(object sender, MouseButtonEventArgs e)
-    {
-        if (!_pressing) return;
-        _pressing = false;
-        CollapsedView.ReleaseMouseCapture();
-
-        var pos = e.GetPosition(this);
-        double dy = pos.Y - _pressStart.Y;
-        double dx = pos.X - _pressStart.X;
-        bool isClick = Math.Abs(dx) < 8 && Math.Abs(dy) < 8;
-
-        // пружиним содержимое обратно
-        ContentHostMove.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(0, TimeSpan.FromMilliseconds(280))
-            {
-                EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 }
-            });
-
-        if (!_gameMode && (isClick || dy > 40)) Expand();
-    }
-
-    /// <summary>«Резина»: асимптотическое растяжение до ~12 px.</summary>
-    private static double Rubber(double d) => 12.0 * (1.0 - Math.Exp(-d / 55.0));
-
-    private void Window_PreviewDown(object sender, MouseButtonEventArgs e)
-    {
-        if (!_expanded || _animating) return;
-        _swipeTracking = true;
-        _pressStart = e.GetPosition(this);
-        _swipeOnButton = e.OriginalSource is DependencyObject src && FindParent<ButtonBase>(src) != null;
-    }
-
-    private void Window_PreviewUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_swipeTracking) return;
-        _swipeTracking = false;
-        if (!_expanded || _swipeOnButton) return;
-        double dx = e.GetPosition(this).X - _pressStart.X;
-        if (dx <= -70) SwitchTab(+1);
-        else if (dx >= 70) SwitchTab(-1);
-    }
-
-    private static T? FindParent<T>(DependencyObject? d) where T : DependencyObject
-    {
-        while (d != null)
-        {
-            if (d is T t) return t;
-            d = VisualTreeHelper.GetParent(d) ?? (d is FrameworkElement fe ? fe.Parent : null);
-        }
-        return null;
     }
 
     // ==================== Трей ====================

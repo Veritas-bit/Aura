@@ -1,208 +1,309 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DynamicIsland.Services;
-using Microsoft.Win32;
 
 namespace DynamicIsland.Views;
 
-/// <summary>Многофункциональный плеер (Windows Media Foundation).</summary>
 public partial class PlayerPanel : UserControl
 {
-    private readonly MediaPlayer _player = new();
-    private readonly DispatcherTimer _posTimer;
-    private readonly List<string> _files = new();
-    private readonly Random _rnd = new();
-    private int _index = -1;
-    private bool _playing;
-    private bool _shuffle;
-    private bool _repeat;
+    private readonly MediaSessionService _media;
+    private readonly DispatcherTimer _positionTimer;
+    private readonly DispatcherTimer _volumeTimer;
     private bool _seeking;
-    private bool _opened;
+    private bool _updatingVolume;
+    private bool _updatingSources;
+    private string _trackId = "";
+    private byte[]? _artworkBytes;
+    private bool _isPlaying;
+    private double _playbackRate = 1;
+    private TimeSpan _positionAnchor;
+    private TimeSpan _duration;
+    private DateTimeOffset _anchorTime = DateTimeOffset.UtcNow;
 
-    public PlayerPanel()
+    public PlayerPanel(MediaSessionService media)
     {
         InitializeComponent();
+        _media = media;
+        _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+        _positionTimer.Tick += (_, _) => RenderPosition();
+        _volumeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _volumeTimer.Tick += (_, _) => RefreshVolume();
 
-        // обложка в цвет компаньона
-        void ApplyEyeColor()
+        Loaded += (_, _) =>
         {
-            try
-            {
-                CoverEyes.SetLineTheme(ThemeService.IsLight);
-                CoverEyes.SetEyeColor((Color)ColorConverter.ConvertFromString(SettingsService.Current.EyeColor));
-            }
-            catch { }
-        }
-        ApplyEyeColor();
-        SettingsService.Changed += ApplyEyeColor;
-
-        foreach (var f in SettingsService.Current.Playlist)
-            if (File.Exists(f)) AddToList(f);
-
-        VolumeSlider.Value = SettingsService.Current.PlayerVolume * 100;
-        _player.Volume = SettingsService.Current.PlayerVolume;
-        _player.MediaEnded += (_, _) => Next(auto: true);
-        _player.MediaOpened += (_, _) =>
-        {
-            _opened = true;
-            if (_player.NaturalDuration.HasTimeSpan)
-            {
-                SeekSlider.Maximum = _player.NaturalDuration.TimeSpan.TotalSeconds;
-                TimeTotal.Text = FormatTime(_player.NaturalDuration.TimeSpan);
-            }
+            _media.Changed += OnMediaChanged;
+            _media.SourcesChanged += UpdateSources;
+            _positionTimer.Start();
+            _volumeTimer.Start();
+            RefreshVolume();
+            UpdateSources(_media.Sources);
+            UpdateMedia(_media.Current);
         };
-
-        _posTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _posTimer.Tick += (_, _) =>
+        Unloaded += (_, _) =>
         {
-            if (_playing && !_seeking && _opened)
-            {
-                SeekSlider.Value = _player.Position.TotalSeconds;
-                TimeCurrent.Text = FormatTime(_player.Position);
-            }
+            _media.Changed -= OnMediaChanged;
+            _media.SourcesChanged -= UpdateSources;
+            _positionTimer.Stop();
+            _volumeTimer.Stop();
         };
-        _posTimer.Start();
 
         SeekSlider.PreviewMouseLeftButtonDown += (_, _) => _seeking = true;
-        SeekSlider.PreviewMouseLeftButtonUp += (_, _) =>
+        SeekSlider.PreviewMouseLeftButtonUp += (_, _) => CommitSeek();
+        SeekSlider.AddHandler(Thumb.DragCompletedEvent,
+            new DragCompletedEventHandler((_, _) => CommitSeek()));
+        SeekSlider.PreviewKeyDown += (_, e) =>
         {
-            _seeking = false;
-            if (_opened) _player.Position = TimeSpan.FromSeconds(SeekSlider.Value);
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.PageUp or Key.PageDown or Key.Home or Key.End)
+                _seeking = true;
+        };
+        SeekSlider.PreviewKeyUp += (_, e) =>
+        {
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.PageUp or Key.PageDown or Key.Home or Key.End)
+                CommitSeek();
         };
     }
 
-    // ---------- Плейлист ----------
-
-    private void Add_Click(object s, RoutedEventArgs e)
+    private void OnMediaChanged(MediaSessionInfo info)
     {
-        var dlg = new OpenFileDialog
+        if (Dispatcher.CheckAccess())
+            UpdateMedia(info);
+        else Dispatcher.Invoke(() => UpdateMedia(info));
+    }
+
+    private void UpdateSources(IReadOnlyList<MediaSource> sources)
+    {
+        if (!Dispatcher.CheckAccess())
         {
-            Multiselect = true,
-            Filter = "Аудио и видео|*.mp3;*.wav;*.m4a;*.wma;*.flac;*.ogg;*.mp4;*.m4v|Все файлы|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
-        foreach (var f in dlg.FileNames) AddToList(f);
-        Persist();
-        if (_index < 0 && _files.Count > 0) PlayAt(0);
-    }
+            Dispatcher.Invoke(() => UpdateSources(sources));
+            return;
+        }
+        if (!IsLoaded) return;
 
-    private void Remove_Click(object s, RoutedEventArgs e)
-    {
-        int i = PlaylistBox.SelectedIndex;
-        if (i < 0) return;
-        _files.RemoveAt(i);
-        PlaylistBox.Items.RemoveAt(i);
-        Persist();
-        if (i == _index) Stop();
-        else if (i < _index) _index--;
-    }
-
-    private void Playlist_DoubleClick(object s, MouseButtonEventArgs e)
-    {
-        if (PlaylistBox.SelectedIndex >= 0) PlayAt(PlaylistBox.SelectedIndex);
-    }
-
-    private void AddToList(string file)
-    {
-        _files.Add(file);
-        PlaylistBox.Items.Add(new TextBlock
+        _updatingSources = true;
+        try
         {
-            Text = Path.GetFileNameWithoutExtension(file),
-            FontSize = 12,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        });
+            if (SourceSelector.ItemsSource is not IEnumerable<MediaSource> currentSources ||
+                !currentSources.SequenceEqual(sources))
+                SourceSelector.ItemsSource = sources;
+            SourceSelector.SelectedValue = _media.Current.SourceId;
+            SourceSelector.Visibility = sources.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        finally { _updatingSources = false; }
     }
 
-    private void Persist()
+    private async void Source_Changed(object sender, SelectionChangedEventArgs e)
     {
-        SettingsService.Current.Playlist = new List<string>(_files);
-        SettingsService.Save();
+        if (_updatingSources || SourceSelector.SelectedValue is not string sourceId) return;
+        await _media.SelectSourceAsync(sourceId);
     }
 
-    // ---------- Воспроизведение ----------
+    private void UpdateMedia(MediaSessionInfo info)
+    {
+        if (!IsLoaded) return;
+        if (!string.Equals(SourceSelector.SelectedValue as string, info.SourceId, StringComparison.Ordinal))
+        {
+            _updatingSources = true;
+            try { SourceSelector.SelectedValue = info.SourceId; }
+            finally { _updatingSources = false; }
+        }
+
+        bool newTrack = !string.Equals(_trackId, info.TrackId, StringComparison.Ordinal);
+        bool artworkChanged = !ReferenceEquals(_artworkBytes, info.Artwork);
+        double playbackRate = info.PlaybackRate > 0 ? info.PlaybackRate : 1;
+        bool playbackChanged = _isPlaying != info.IsPlaying ||
+                               Math.Abs(_playbackRate - playbackRate) > 0.001;
+        _trackId = info.TrackId;
+        if (newTrack)
+            _duration = info.Duration;
+        else if (info.Duration > TimeSpan.Zero &&
+                 Math.Abs((info.Duration - _duration).TotalSeconds) > 1)
+            _duration = info.Duration;
+
+        TrackTitle.Text = info.HasTrack ? info.Title : "Запустите музыку в любом приложении";
+        TrackArtist.Text = info.HasTrack
+            ? (string.IsNullOrWhiteSpace(info.Artist) ? "Исполнитель не указан" : info.Artist)
+            : "AURA покажет текущий трек и синхронизирует управление";
+        SessionStatus.Text = info.Error ?? (info.HasTrack
+            ? (info.IsPlaying
+                ? (info.CanSeek ? "Воспроизведение" : "Воспроизведение · перемотка недоступна")
+                : (info.CanSeek ? "На паузе" : "На паузе · перемотка недоступна"))
+            : "Нет активной медиасессии");
+        SetPlayIcon(info.IsPlaying);
+
+        if (newTrack || artworkChanged)
+        {
+            _artworkBytes = info.Artwork;
+            SetArtwork(info.Artwork);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (newTrack)
+        {
+            _positionAnchor = info.Position;
+            _anchorTime = info.CapturedAt;
+            SeekSlider.Value = 0;
+        }
+        else if (playbackChanged)
+        {
+            _positionAnchor = GetCurrentPosition(now);
+            _anchorTime = now;
+            _playbackRate = playbackRate;
+        }
+        else if (!info.IsPlaying)
+        {
+            _positionAnchor = info.Position;
+            _anchorTime = now;
+        }
+        else
+        {
+            var predicted = GetCurrentPosition(now);
+            var reported = info.Position + (info.IsPlaying && now > info.CapturedAt
+                ? TimeSpan.FromTicks((long)((now - info.CapturedAt).Ticks * playbackRate))
+                : TimeSpan.Zero);
+            var correction = reported - predicted;
+            if (Math.Abs(correction.TotalSeconds) > 0.75)
+            {
+                _positionAnchor = reported;
+                _anchorTime = now;
+            }
+            else if (Math.Abs(correction.TotalSeconds) > 0.08)
+            {
+                var boundedCorrection = TimeSpan.FromMilliseconds(
+                    Math.Clamp(correction.TotalMilliseconds * 0.35, -60, 60));
+                _positionAnchor = predicted + boundedCorrection;
+                _anchorTime = now;
+            }
+        }
+        _isPlaying = info.IsPlaying;
+        _playbackRate = playbackRate;
+        if (_duration > TimeSpan.Zero)
+        {
+            SeekSlider.Maximum = _duration.TotalSeconds;
+            SeekSlider.IsEnabled = true;
+            TimeTotal.Text = FormatTime(_duration);
+        }
+        else
+        {
+            SeekSlider.Maximum = 1;
+            SeekSlider.IsEnabled = false;
+            TimeTotal.Text = "0:00";
+        }
+        SeekSlider.IsEnabled = _duration > TimeSpan.Zero && info.CanSeek;
+        SeekSlider.ToolTip = info.CanSeek
+            ? "Перемотка активного медиаплеера"
+            : "Выбранный плеер не предоставляет управление перемоткой Windows";
+
+        RenderPosition();
+    }
+
+    private void SetArtwork(byte[]? bytes)
+    {
+        BitmapImage? image = null;
+        if (bytes is { Length: > 0 })
+        {
+            image = new BitmapImage();
+            using var stream = new MemoryStream(bytes);
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+        }
+
+        TrackCover.Source = image;
+        ArtworkBackdrop.Source = image;
+        TrackCover.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
+        CoverFallback.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private TimeSpan GetCurrentPosition(DateTimeOffset now)
+    {
+        var position = _positionAnchor;
+        if (_isPlaying)
+            position += TimeSpan.FromTicks((long)((now - _anchorTime).Ticks * _playbackRate));
+        if (_duration > TimeSpan.Zero && position > _duration) position = _duration;
+        return position < TimeSpan.Zero ? TimeSpan.Zero : position;
+    }
+
+    private void RenderPosition()
+    {
+        if (_seeking) return;
+        var position = GetCurrentPosition(DateTimeOffset.UtcNow);
+        SeekSlider.Value = Math.Clamp(position.TotalSeconds, SeekSlider.Minimum, SeekSlider.Maximum);
+        TimeCurrent.Text = FormatTime(position);
+    }
+
+    private void RefreshVolume()
+    {
+        double volume = SystemControlService.GetVolumeLevel();
+        _updatingVolume = true;
+        VolumeSlider.IsEnabled = volume >= 0;
+        if (volume >= 0)
+        {
+            VolumeSlider.Value = volume;
+            VolumeText.Text = $"{volume:0}%";
+        }
+        else
+        {
+            VolumeText.Text = "N/A";
+        }
+
+        bool muted = SystemControlService.GetMute();
+        if (Application.Current.FindResource(muted ? "ic_volume_x" : "ic_volume_2") is Geometry geometry)
+            VolumeIcon.Data = geometry;
+        _updatingVolume = false;
+    }
 
     private void SetPlayIcon(bool playing)
     {
-        if (Application.Current.FindResource(playing ? "ic_pause" : "ic_play") is Geometry g)
-            PlayIcon.Data = g;
+        if (Application.Current.FindResource(playing ? "ic_pause" : "ic_play") is Geometry geometry)
+            PlayIcon.Data = geometry;
     }
 
-    private void PlayAt(int index)
-    {
-        if (index < 0 || index >= _files.Count) return;
-        _index = index;
-        PlaylistBox.SelectedIndex = index;
-        try
-        {
-            _player.Open(new Uri(_files[index]));
-            _player.Play();
-            _playing = true;
-            _opened = false;
-            SetPlayIcon(true);
-            TrackTitle.Text = Path.GetFileNameWithoutExtension(_files[index]);
-            TrackPath.Text = _files[index];
-        }
-        catch (Exception ex)
-        {
-            TrackTitle.Text = "Не удалось открыть файл";
-            TrackPath.Text = ex.Message;
-        }
-    }
+    private async void PlayPause_Click(object sender, RoutedEventArgs e) =>
+        await _media.TogglePlaybackAsync();
 
-    private void Stop()
-    {
-        _player.Stop();
-        _playing = false;
-        SetPlayIcon(false);
-        TrackTitle.Text = "Ничего не играет";
-        TrackPath.Text = "";
-        TimeCurrent.Text = "0:00";
-    }
+    private async void Prev_Click(object sender, RoutedEventArgs e) =>
+        await _media.SkipPreviousAsync();
 
-    private void PlayPause_Click(object s, RoutedEventArgs e)
-    {
-        if (_playing) { _player.Pause(); _playing = false; SetPlayIcon(false); }
-        else
-        {
-            if (_opened) { _player.Play(); _playing = true; SetPlayIcon(true); }
-            else if (_files.Count > 0) PlayAt(Math.Max(0, _index));
-        }
-    }
+    private async void Next_Click(object sender, RoutedEventArgs e) =>
+        await _media.SkipNextAsync();
 
-    private void Prev_Click(object s, RoutedEventArgs e)
-    {
-        if (_files.Count == 0) return;
-        PlayAt((_index - 1 + _files.Count) % _files.Count);
-    }
-
-    private void Next_Click(object s, RoutedEventArgs e) => Next(auto: false);
-
-    private void Next(bool auto)
-    {
-        if (_files.Count == 0) return;
-        if (auto && _repeat) { PlayAt(_index); return; }
-        int next = _shuffle ? _rnd.Next(_files.Count) : (_index + 1) % _files.Count;
-        PlayAt(next);
-    }
-
-    private void Shuffle_Click(object s, RoutedEventArgs e) => _shuffle = !_shuffle;
-    private void Repeat_Click(object s, RoutedEventArgs e) => _repeat = !_repeat;
-
-    private void Seek_Changed(object s, RoutedPropertyChangedEventArgs<double> e)
+    private void Seek_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_seeking) TimeCurrent.Text = FormatTime(TimeSpan.FromSeconds(e.NewValue));
     }
 
-    private void Volume_Changed(object s, RoutedPropertyChangedEventArgs<double> e)
+    private async void CommitSeek()
     {
-        _player.Volume = VolumeSlider.Value / 100.0;
-        SettingsService.Current.PlayerVolume = _player.Volume;
+        if (!_seeking) return;
+        _seeking = false;
+        _positionAnchor = TimeSpan.FromSeconds(SeekSlider.Value);
+        _anchorTime = DateTimeOffset.UtcNow;
+        await _media.SeekAsync(_positionAnchor);
     }
 
-    private static string FormatTime(TimeSpan t) =>
-        t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+    private void Volume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_updatingVolume && VolumeSlider.IsEnabled)
+        {
+            SystemControlService.SetVolumeLevel(VolumeSlider.Value);
+            VolumeText.Text = $"{VolumeSlider.Value:0}%";
+        }
+    }
+
+    private void Mute_Click(object sender, RoutedEventArgs e)
+    {
+        SystemControlService.SetMute(!SystemControlService.GetMute());
+        RefreshVolume();
+    }
+
+    private static string FormatTime(TimeSpan time) =>
+        time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"m\:ss");
 }
