@@ -176,6 +176,7 @@ public partial class SettingsWindow : Window
         SwWeatherInIsland.IsChecked = s.ShowWeatherInIsland;
         s.CollapsedTrackDisplayMode = AppSettings.NormalizeTrackDisplayMode(s.CollapsedTrackDisplayMode);
         TrackDisplayModeBox.SelectedIndex = s.CollapsedTrackDisplayMode - 1;
+        SwReferenceTrackCard.IsChecked = s.ReferenceTrackCard;
         SwBattery.IsChecked = s.ShowBattery;
         SwStats.IsChecked = s.ShowStats;
         SwCpu.IsChecked = s.StatCpu;
@@ -300,6 +301,7 @@ public partial class SettingsWindow : Window
         st.ShowWeather = SwWeather.IsChecked == true;
         st.ShowWeatherInIsland = SwWeatherInIsland.IsChecked == true;
         st.ShowBattery = SwBattery.IsChecked == true;
+        st.ReferenceTrackCard = SwReferenceTrackCard.IsChecked == true;
         st.ShowStats = SwStats.IsChecked == true;
         st.StatCpu = SwCpu.IsChecked == true;
         st.StatRam = SwRam.IsChecked == true;

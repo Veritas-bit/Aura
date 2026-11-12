@@ -831,6 +831,9 @@ public partial class MainWindow : Window
                     ? Visibility.Collapsed : Visibility.Visible;
                 FullTrackFallback.Visibility = FullTrackArtwork.Source is null
                     ? Visibility.Visible : Visibility.Collapsed;
+                ClassicTrackArtwork.Source = FullTrackArtwork.Source;
+                ClassicTrackArtwork.Visibility = FullTrackArtwork.Visibility;
+                ClassicTrackFallback.Visibility = FullTrackFallback.Visibility;
             }
         }
         UpdateTrackCardTimeline();
@@ -853,7 +856,10 @@ public partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         BrightnessIslandView.Visibility = _transientKind == TransientCardKind.Brightness
             ? Visibility.Visible : Visibility.Collapsed;
-        FullTrackCardView.Visibility = _transientKind == TransientCardKind.Track
+        bool trackCard = _transientKind == TransientCardKind.Track;
+        FullTrackCardView.Visibility = trackCard && SettingsService.Current.ReferenceTrackCard
+            ? Visibility.Visible : Visibility.Collapsed;
+        ClassicTrackCardView.Visibility = trackCard && !SettingsService.Current.ReferenceTrackCard
             ? Visibility.Visible : Visibility.Collapsed;
         NotificationIslandView.Visibility = _transientKind == TransientCardKind.Notification
             ? Visibility.Visible : Visibility.Collapsed;
@@ -1039,6 +1045,16 @@ public partial class MainWindow : Window
                 FullTrackTitle.Text = string.IsNullOrWhiteSpace(subtitle) ? title
                     : $"{title} — {subtitle}";
                 FullTrackArtist.Text = subtitle;
+                ClassicTrackTitle.Text = title;
+                ClassicTrackArtist.Text = subtitle;
+                ClassicTrackAlbum.Text = details;
+                ClassicTrackAlbum.Visibility = string.IsNullOrWhiteSpace(details)
+                    ? Visibility.Collapsed : Visibility.Visible;
+                ClassicTrackArtwork.Source = CreateTrackArtwork(artwork);
+                ClassicTrackArtwork.Visibility = ClassicTrackArtwork.Source is null
+                    ? Visibility.Collapsed : Visibility.Visible;
+                ClassicTrackFallback.Visibility = ClassicTrackArtwork.Source is null
+                    ? Visibility.Visible : Visibility.Collapsed;
                 TrackCardHeadphones.Visibility = _volumeMonitor.HeadphonesConnected
                     ? Visibility.Visible : Visibility.Collapsed;
                 FullTrackAlbum.Text = details;

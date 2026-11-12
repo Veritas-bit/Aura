@@ -44,6 +44,7 @@ public class AppSettings
     public bool StatRam { get; set; } = true;
     public bool StatGpu { get; set; } = true;
     public int CollapsedTrackDisplayMode { get; set; } = 1;
+    public bool ReferenceTrackCard { get; set; } = true;
     public bool NotificationsEnabled { get; set; } = true;
 
     // Игровой режим: в полноэкранных играх — тонкий вырез с температурами, пингом и потерями

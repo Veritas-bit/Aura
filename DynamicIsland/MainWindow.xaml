@@ -308,6 +308,40 @@
                     </Grid>
                 </Grid>
 
+                <!-- Optional original AURA style. Keep the user-selected version, not a third popup state. -->
+                <Grid x:Name="ClassicTrackCardView" Width="325" Height="80"
+                      Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="78"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="64" Height="64" CornerRadius="11"
+                            Margin="8,0,0,0" Background="{DynamicResource BgCardBrush}"
+                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Grid>
+                            <Image x:Name="ClassicTrackArtwork" Width="64" Height="64"
+                                   Stretch="UniformToFill">
+                                <Image.Clip>
+                                    <RectangleGeometry Rect="0,0,64,64" RadiusX="11" RadiusY="11"/>
+                                </Image.Clip>
+                            </Image>
+                            <Path x:Name="ClassicTrackFallback" Width="25" Height="25"
+                                  Style="{StaticResource VecIcon}" Data="{StaticResource ic_music}"
+                                  Fill="{DynamicResource AccentBrush}"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="2,0,12,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="ClassicTrackTitle" FontSize="13" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPriBrush}"/>
+                        <TextBlock x:Name="ClassicTrackArtist" FontSize="11" Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecBrush}"/>
+                        <TextBlock x:Name="ClassicTrackAlbum" FontSize="10" Margin="0,3,0,0"
+                                   Visibility="Collapsed" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextSecBrush}"/>
+                    </StackPanel>
+                </Grid>
+
                 <!-- State 6: 325x80 Windows notification. -->
                 <Grid x:Name="NotificationIslandView" Width="325" Height="80"
                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">

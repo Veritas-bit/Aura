@@ -195,6 +195,13 @@
                                     <TextBlock Text="Мини-плеер — 325×24. При смене трека показывается карточка 325×80, затем плеер снова становится компактным."
                                                FontSize="12" TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextSecBrush}" Margin="0,0,0,8"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,10">
+                                        <ToggleButton x:Name="SwReferenceTrackCard"
+                                                      Style="{StaticResource Switch}"
+                                                      Click="Display_Changed"/>
+                                        <TextBlock Text=" Карточка трека по SVG-референсу"
+                                                   FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                     <ComboBox x:Name="TrackDisplayModeBox" Visibility="Collapsed" MinHeight="38" Padding="10,4"
                                               Background="{DynamicResource BgDeepBrush}"
                                               Foreground="{DynamicResource TextPriBrush}"
